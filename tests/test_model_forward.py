@@ -11,7 +11,7 @@ if str(_SRC) not in sys.path:
 
 
 def test_gpt_forward_shape():
-    from mini_llm.model import GPTModel
+    from mini_llm.m04_model import GPTModel
 
     cfg = {
         "vocab_size": 100,
@@ -29,8 +29,8 @@ def test_gpt_forward_shape():
 
 
 def test_generate_step():
-    from mini_llm.generate import generate
-    from mini_llm.model import GPTModel
+    from mini_llm.m05_generate import generate
+    from mini_llm.m04_model import GPTModel
 
     cfg = {
         "vocab_size": 50,

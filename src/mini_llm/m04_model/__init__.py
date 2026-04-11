@@ -8,7 +8,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from mini_llm.attention import MultiHeadAttention
+from mini_llm.m03_attention import MultiHeadAttention
 
 
 class LayerNorm(nn.Module):

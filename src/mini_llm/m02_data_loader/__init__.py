@@ -10,7 +10,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from mini_llm import tokenizer as tok_mod
+from mini_llm import m01_tokenizer as tok_mod
 
 
 class GPTDataset(Dataset):

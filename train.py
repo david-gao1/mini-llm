@@ -86,10 +86,10 @@ def main() -> int:
     seed = int(cfg.get("seed", 123))
     _set_seed(seed)
 
-    from mini_llm import tokenizer as tok_mod
-    from mini_llm.data_loader import load_text, train_val_dataloaders
-    from mini_llm.generate import generate_text_simple
-    from mini_llm.model import GPTModel
+    from mini_llm import m01_tokenizer as tok_mod
+    from mini_llm.m02_data_loader import load_text, train_val_dataloaders
+    from mini_llm.m05_generate import generate_text_simple
+    from mini_llm.m04_model import GPTModel
 
     model_cfg = cfg["model"]
     train_cfg = cfg["train"]

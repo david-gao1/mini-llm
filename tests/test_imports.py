@@ -10,5 +10,7 @@ if str(_SRC) not in sys.path:
 
 def test_package_importable():
     import mini_llm
+    import mini_llm.data_loader  # noqa: F401
+    import mini_llm.tokenizer  # noqa: F401
 
     assert hasattr(mini_llm, "__version__")

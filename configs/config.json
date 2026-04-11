@@ -1,0 +1,31 @@
+{
+  "run_name": "team_gpt",
+  "seed": 123,
+  "data": {
+    "url": "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch02/01_main-chapter-code/the-verdict.txt",
+    "filename": "the-verdict.txt",
+    "train_ratio": 0.9,
+    "max_chars": null
+  },
+  "model": {
+    "vocab_size": 50257,
+    "context_length": 64,
+    "emb_dim": 128,
+    "n_heads": 4,
+    "n_layers": 2,
+    "drop_rate": 0.1,
+    "qkv_bias": false
+  },
+  "train": {
+    "learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "num_epochs": 1,
+    "batch_size": 8,
+    "eval_freq": 5,
+    "eval_iter": 1,
+    "checkpoint_every_steps": 50,
+    "start_context": "Every effort moves you"
+  },
+  "device": "auto",
+  "output_dir": "runs"
+}

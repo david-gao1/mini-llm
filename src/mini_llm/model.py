@@ -1,0 +1,3 @@
+"""GPTModel、TransformerBlock 等。请独立实现；对照 ch04 / 官方包。"""
+
+from __future__ import annotations

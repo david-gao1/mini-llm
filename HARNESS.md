@@ -1,0 +1,50 @@
+# Harness 工程
+
+总闸门 **M1 / M2** 见根目录 [`README.md`](README.md)。本文说明如何按 **Harness** 拆解交付物；**之后新增需求请按「需求模板」写**，避免只有功能描述没有验收手段。
+
+## 思想
+
+每个交付物都对应**边界契约**（输入 / 输出 / 形状或行为）+ **可执行 Harness**（`pytest`、或带固定配置的 `train.py` 一次运行）+ **通过判据**（数值有限、文件落盘、形状一致）。实现服从契约，验收服从 Harness，不在此之外另开「口头完成」。
+
+## 分层
+
+| 层 | 含义 | 典型 Harness |
+|----|------|----------------|
+| **L0** | 纯函数 / 单模块，无 I/O | `uv run pytest tests/...` 中单测 |
+| **L1** | 单模块 + 配置或小张量 | 单测中构造 `config` / 固定随机种子 |
+| **L2** | 模块链（如 loader → model → loss） | `tests/` 中集成测试或短脚本 |
+| **L3** | 端到端预训练 / 生成 | `uv run python train.py --config configs/config.json`；checkpoint 与 `m05_generate` |
+
+## 需求模板（复制使用）
+
+| 字段 | 说明 |
+|------|------|
+| **REQ-ID** | 如 `REQ-P1-03` |
+| **范围** | 涉及目录 / 责任人 |
+| **契约** | 公开 API、张量形状、与 `configs/config.json` 的字段对应关系 |
+| **Harness** | 哪条命令或哪个测试文件函数 |
+| **通过判据** | 可观察、可重复（loss 有限、文件存在、形状 `(B,T,C)` 等） |
+| **依赖** | 必须先绿的 REQ-ID |
+
+## Part I（第 2–5 章 · 预训练闭环）
+
+与 README 中「必做（约第 1–2 周）」一致；**总闸门 M1 = L3 通过判据**。
+
+**P1-01** 的设计思路与理论说明见 [`docs/m01_tokenizer.md`](docs/m01_tokenizer.md)。
+
+| REQ-ID | 交付 | 契约要点 | Harness | 通过判据 |
+|--------|------|----------|---------|----------|
+| P1-01 | `m01_tokenizer` | 与 `model.vocab_size` 一致；可 encode/decode | L0：`pytest` 中与 tokenizer 相关用例 | 往返一致、长度合理 |
+| P1-02 | `m02_data_loader` | `input`/`target`：`[B,T]`；步长与 `context_length` 对齐 | L1/L2：loader + 小 batch | batch 形状正确、无越界 |
+| P1-03 | `m03_attention` | 因果 mask；多头输出与 `emb_dim` 一致 | L0/L1：attention 用例 | 与已知张量对比或梯度有限 |
+| P1-04 | `m04_model` | `logits`：`[B,T,V]` | L1/L2：`test_model_forward` 等 | 前向可跑、形状匹配配置 |
+| P1-05 | `train.py` | CE loss；eval；`checkpoint_latest.pt` 路径与 `output_dir`/`run_name` | L3：`uv run python train.py --config configs/config.json` | **M1**：若干 step 后 train/val loss 为有限实数；checkpoint 写出 |
+| — | **闸门 M1** | 上述 REQ 依赖链闭合 | L3 + 单测绿 | `pytest` 通过 + 训练不 NaN |
+
+## Part II（第 3 周 · 生成与可选微调）
+
+| REQ-ID | 交付 | 契约要点 | Harness | 通过判据 |
+|--------|------|----------|---------|----------|
+| P2-01 | `m05_generate` | 自回归；temperature、top-k；消费 checkpoint | L2/L3：加载 `runs/.../checkpoint_latest.pt` 跑短生成 | 输出为 token 序列 / 可 decode 文本 |
+| — | **闸门 M2** | 训练 → 生成链路 | L3 | checkpoint 被加载且生成非空 |
+| P2-02 | （可选）微调 | 与课程 ch06/ch07 二选一对齐 | 由课程另给 Harness | 按课程判据 |

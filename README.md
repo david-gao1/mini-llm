@@ -39,10 +39,12 @@ uv run pytest
 
 对照原书章节与路径见 [`REFERENCE.md`](REFERENCE.md)。
 
-## 集成验收
+## 集成验收（总闸门）
 
 - **M1** — 小数据训练一步 loss 可算且有限  
 - **M2** — checkpoint 可被生成读入并产出文本  
+
+**Harness 拆解、分层、REQ 表与需求模板** 单独维护在 **[`HARNESS.md`](HARNESS.md)**（新增需求以该文件为准迭代）。
 
 ## 代码布局（`mini_llm`）
 
@@ -97,6 +99,8 @@ uv run pytest
 | [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m05_generate/` |
 | [`train.py`](train.py) | 训练入口（预训练循环、损失、评估） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |
+| [`HARNESS.md`](HARNESS.md) | Harness 工程：分层、Part I/II REQ、需求模板 |
+| [`docs/README.md`](docs/README.md) | 模块级设计文档索引（如 m01 分词器详设） |
 
 ## 对照跑通（可选）
 

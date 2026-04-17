@@ -87,6 +87,7 @@ def main() -> int:
     _set_seed(seed)
 
     from mini_llm import m01_tokenizer as tok_mod
+    from mini_llm.m01_tokenizer import decode_token_ids, encode_text
     from mini_llm.m02_data_loader import load_text, train_val_dataloaders
     from mini_llm.m05_generate import generate_text_simple
     from mini_llm.m04_model import GPTModel
@@ -95,7 +96,7 @@ def main() -> int:
     train_cfg = cfg["train"]
     data_cfg = cfg["data"]
 
-    if tok_mod.vocab_size() != model_cfg["vocab_size"]:
+    if not tok_mod.vocab_matches_config(int(model_cfg["vocab_size"])):
         print(
             f"Warning: tokenizer vocab {tok_mod.vocab_size()} != config model.vocab_size {model_cfg['vocab_size']}",
             file=sys.stderr,
@@ -137,7 +138,6 @@ def main() -> int:
 
     global_step = 0
 
-    enc = tok_mod.get_encoding()
     eval_freq = int(train_cfg["eval_freq"])
     eval_iter = int(train_cfg["eval_iter"])
     ckpt_every = int(train_cfg["checkpoint_every_steps"])
@@ -145,7 +145,7 @@ def main() -> int:
     start_context = str(train_cfg.get("start_context", "Every effort moves you"))
 
     def text_to_ids(s: str) -> torch.Tensor:
-        ids = enc.encode(s)
+        ids = encode_text(s)
         return torch.tensor(ids, device=device).unsqueeze(0)
 
     def print_sample() -> None:
@@ -160,7 +160,7 @@ def main() -> int:
                 context_size=ctx_len,
             )
         flat = out.squeeze(0).tolist()
-        print(enc.decode(flat).replace("\n", " "))
+        print(decode_token_ids(flat).replace("\n", " "))
         model.train()
 
     ckpt_path = out_root / "checkpoint_latest.pt"

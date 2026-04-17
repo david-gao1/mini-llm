@@ -10,7 +10,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from mini_llm import m01_tokenizer as tok_mod
+from mini_llm.m01_tokenizer import encode_text
 
 
 class GPTDataset(Dataset):
@@ -19,13 +19,12 @@ class GPTDataset(Dataset):
     def __init__(
         self,
         txt: str,
-        enc: Any,
         max_length: int,
         stride: int,
     ) -> None:
         self.input_ids: list[torch.Tensor] = []
         self.target_ids: list[torch.Tensor] = []
-        token_ids = enc.encode(txt, allowed_special={"<|endoftext|>"})
+        token_ids = encode_text(txt)
 
         for i in range(0, len(token_ids) - max_length, stride):
             chunk_in = token_ids[i : i + max_length]
@@ -90,8 +89,7 @@ def create_dataloader(
     drop_last: bool,
     num_workers: int = 0,
 ) -> DataLoader:
-    enc = tok_mod.get_encoding()
-    ds = GPTDataset(text, enc, max_length, stride)
+    ds = GPTDataset(text, max_length, stride)
     return DataLoader(
         ds,
         batch_size=batch_size,

@@ -11,13 +11,13 @@
 
 | 模块 | REQ | 代码 | 测试 | 阻塞项 |
 |------|-----|------|------|--------|
-| `m01_tokenizer` | P1-01 | done | blocked | tiktoken 首次运行需联网下载 vocab.bpe |
-| `m02_data_loader` | P1-02 | done | todo | 缺专属测试文件 |
-| `m03_attention` | P1-03 | done | todo | 缺专属测试文件 |
+| `m01_tokenizer` | P1-01 | done | done | — |
+| `m02_data_loader` | P1-02 | done | done | — |
+| `m03_attention` | P1-03 | done | done | — |
 | `m04_model` | P1-04 | done | done | — |
 | `train.py` | P1-05 | done | todo | 端到端训练未跑（依赖数据下载） |
 | `m05_generate` | P2-01 | done | done | — |
-| **闸门 M1** | — | — | blocked | tokenizer 测试 + 端到端训练未验证 |
+| **闸门 M1** | — | — | blocked | 端到端训练未验证 |
 | **闸门 M2** | — | — | blocked | 依赖 M1 checkpoint |
 
 ---
@@ -53,16 +53,18 @@ vocab_matches_config(model_vocab_size: int) -> bool
 
 | 测试文件 | 用例 | 状态 |
 |----------|------|------|
-| `tests/test_tokenizer.py` | `test_vocab_size_matches_gpt2` | blocked |
-| | `test_encode_decode_roundtrip` | blocked |
-| | `test_endoftext_allowed_in_corpus_string` | blocked |
-| | `test_vocab_matches_config_ok` | blocked |
-| | `test_vocab_mismatch_raises` | blocked |
+| `tests/test_tokenizer.py` | `test_vocab_size_matches_gpt2` | done |
+| | `test_encode_decode_roundtrip` | done |
+| | `test_endoftext_allowed_in_corpus_string` | done |
+| | `test_vocab_matches_config_ok` | done |
+| | `test_vocab_mismatch_raises` | done |
+| | `test_empty_string_roundtrip` | done |
+| | `test_all_ids_in_range` | done |
+| | `test_disallow_special_raises` | done |
 
 ### 阻塞项
 
-- tiktoken 首次调用 `get_encoding("gpt2")` 需联网下载 `vocab.bpe`（来自 `openaipublic.blob.core.windows.net`）。在无外网或代理受限环境下全部 5 个用例均 fail。
-- **解除方式**：在有网环境执行一次 `python -c "import tiktoken; tiktoken.get_encoding('gpt2')"` 缓存文件即可。
+无。tiktoken vocab.bpe 已缓存。
 
 ### 已知 TODO
 
@@ -108,13 +110,18 @@ batch 后为 `[B, T]`。
 
 | 测试文件 | 用例 | 状态 |
 |----------|------|------|
-| `tests/test_imports.py` | `test_package_importable`（仅 import 检查） | done |
-
-**缺失**：无专属测试文件验证 batch 形状、滑动窗口正确性、空文本边界。
+| `tests/test_data_loader.py` | `test_dataset_sample_shapes` | done |
+| | `test_target_is_shifted_input` | done |
+| | `test_dataloader_batch_shape` | done |
+| | `test_no_token_id_out_of_range` | done |
+| | `test_stride_controls_overlap` | done |
+| | `test_short_text_produces_empty_dataset` | done |
+| | `test_train_val_split` | done |
+| `tests/test_imports.py` | `test_package_importable`（import 检查） | done |
 
 ### 阻塞项
 
-无代码阻塞；测试缺失为待补项。
+无。
 
 ### 已知 TODO
 
@@ -156,10 +163,12 @@ class MultiHeadAttention(nn.Module):
 
 | 测试文件 | 用例 | 状态 |
 |----------|------|------|
-| （无专属测试） | — | — |
-
-**缺失**：无专属测试文件验证因果 mask、多头输出形状、梯度有限性。
-`test_model_forward.py` 间接覆盖了 attention 的前向路径。
+| `tests/test_attention.py` | `test_output_shape` | done |
+| | `test_output_shape_shorter_sequence` | done |
+| | `test_causal_mask` | done |
+| | `test_gradient_is_finite` | done |
+| | `test_d_out_not_divisible_by_heads_raises` | done |
+| | `test_qkv_bias` | done |
 
 ### 阻塞项
 
@@ -329,15 +338,15 @@ generate(model, idx, max_new_tokens, context_size, *, temperature=1.0, top_k=Non
 
 | # | 前置条件 | 状态 |
 |---|----------|------|
-| 1 | P1-01 tokenizer 测试通过 | blocked（需联网） |
-| 2 | P1-02 data_loader batch 形状正确 | 未测试（缺专属测试） |
-| 3 | P1-03 attention 用例通过 | 未测试（缺专属测试） |
+| 1 | P1-01 tokenizer 测试通过 | done |
+| 2 | P1-02 data_loader batch 形状正确 | done |
+| 3 | P1-03 attention 用例通过 | done |
 | 4 | P1-04 model forward 形状匹配 | done |
-| 5 | `pytest` 全量绿 | blocked（#1） |
+| 5 | `pytest` 全量绿（24/24） | done |
 | 6 | `train.py` 跑若干 step，train/val loss 为有限实数 | 未验证 |
 | 7 | `runs/team_gpt/checkpoint_latest.pt` 写出 | 未验证 |
 
-**解除路径**：在有网环境执行 `python -c "import tiktoken; tiktoken.get_encoding('gpt2')"` 缓存词表 → 补齐 data_loader / attention 测试 → `pytest` 全绿 → `uv run python train.py --config configs/config.json` 验证 loss + checkpoint。
+**解除路径**：`uv run python train.py --config configs/config.json` 验证 loss 有限 + checkpoint 写出。
 
 ### M2 — 训练→生成链路
 

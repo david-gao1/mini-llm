@@ -51,3 +51,35 @@ def test_vocab_mismatch_raises():
 
     with pytest.raises(ValueError, match="vocab_size"):
         assert_vocab_size(1000)
+
+
+def test_empty_string_roundtrip():
+    from mini_llm.m01_tokenizer import decode_token_ids, encode_text
+
+    assert encode_text("") == []
+    assert decode_token_ids([]) == ""
+
+
+def test_all_ids_in_range():
+    """多种文本的 encode 输出 id 均在 [0, vocab_size) 内。"""
+    from mini_llm.m01_tokenizer import encode_text, vocab_size
+
+    v = vocab_size()
+    samples = [
+        "Hello, world!",
+        "你好世界",
+        "🚀 emoji test",
+        "a<|endoftext|>b",
+        "x" * 500,
+    ]
+    for text in samples:
+        ids = encode_text(text)
+        assert all(0 <= i < v for i in ids), f"Out-of-range id in: {text!r}"
+
+
+def test_disallow_special_raises():
+    """allowed_special=set() 时，含特殊 token 的文本应报错。"""
+    from mini_llm.m01_tokenizer import encode_text
+
+    with pytest.raises(ValueError):
+        encode_text("<|endoftext|>", allowed_special=set())

@@ -1,110 +1,173 @@
-# m01 分词器：设计说明（Tokenizer）
+# m01 分词器
 
-本文说明 `src/mini_llm/m01_tokenizer` 的**设计决策**、**理论落点**与**实现边界**，并与原书 **LLMs-from-scratch 第 2 章**（`ch02/01_main-chapter-code/ch02.ipynb`、`dataloader.ipynb`）及仓库 **[`HARNESS.md`](../HARNESS.md)** 中的 **P1-01** 对齐。
+## 从一个问题开始：模型看不懂文字
 
----
+我们要训练一个语言模型。但神经网络不认字——它只能做矩阵乘法，只能处理数字。所以第一个问题就是：**怎么把文字变成数字？**
 
-## 1. 第 2 章在理论上的落点
+最直觉的做法是给每个字符编一个号。"H"是 72，"e"是 101……这当然能用，但问题很快就来了：一句 "Hello world" 就要 11 个数字，每个数字对应一个字符。想象一下一篇几万字的文章，模型要处理的序列会非常长，而 Transformer 的计算量和序列长度的平方成正比。太贵了。
 
-语言模型处理的是**离散 token 序列**，不是原始字符串。第 2 章的核心脉络是：
+另一个极端是给每个词编号。"Hello"是 1，"world"是 2。这样序列短了，但英语里有几十万个词，还有各种拼写变体、人名、错别字。词表会膨胀到不可接受，而且总会遇到"没见过的词"。
 
-1. **文本 → token id**：用某种子词算法（书中主线为 **Byte Pair Encoding, BPE**）把 UTF-8 文本切成子词单元，并映射到整数 id。
-2. **词表大小 `vocab_size`**：id 的取值范围是 `0 … vocab_size - 1`，直接决定 **嵌入层**与**输出层**的最后一维，必须与模型配置一致。
-3. **可逆性**：训练与推理需要 **encode（文本→id）** 与 **decode（id→文本）** 配套，且与后续 **滑动窗口 Dataset**（`m02_data_loader`）使用的 id 序列一致。
-
-BPE 在工程上的含义是：在**字符/字节**与**整词**之间取折中，既控制词表规模，又能表示未登录词；GPT-2 所采用的 BPE 由 OpenAI 发布，**词表大小固定为 50257**（含特殊符号等），这是后续所有维度的基准之一。**BPE 算法动机、合并过程与为何采用子词级设计** 见 **[bpe_principles.md](bpe_principles.md)**。
+**BPE（Byte Pair Encoding）就是在这两个极端之间找到的平衡点。**
 
 ---
 
-## 2. 为什么采用「tiktoken + gpt2 + vocab 50257」
+## BPE 的思路
 
-### 2.1 与书本主线一致
+BPE 的核心想法非常简单：
 
-原书第 2 章及后续预训练章节（如 ch05）的**参考实现**使用 **`tiktoken.get_encoding("gpt2")`**：与 **OpenAI GPT-2** 官方 BPE **完全一致**。这样：
+1. 把文本拆成最小的单元（字节，0–255，共 256 个基础符号）
+2. 扫描语料，找出最常相邻出现的两个符号，把它们合并成一个新符号
+3. 重复这个过程，直到词表达到预设大小
 
-- 对照 `LLMs-from-scratch` 中的代码与实验时，**token 对齐**，便于排错与复现。
-- 团队不必在课程主线内维护一份自研 merge 规则与词表文件，**降低实现与文档双重负担**。
+举个例子。假设语料是 `the cat in the hat`：
 
-### 2.2 词表 50257 是「编码」的一部分，不是随意常数
+- 第 1 轮：`t` 和 `h` 最常相邻出现 → 合并成 `th`（编号 256）
+- 第 2 轮：`th` 和 `e` 最常相邻出现 → 合并成 `the`（编号 257）
+- 第 3 轮：继续找下一个高频对……
 
-`gpt2` 编码在 `tiktoken` 中的实现里，**`n_vocab == 50257`**。该数目来自 GPT-2 BPE 的合并表与词表设计，**不是**本仓库随意选取的超参（**为何是「合并表 + 词表」导出的固定规模**，见 [bpe_principles.md](bpe_principles.md) §3.1、§5）；若改用其他编码名，则 `vocab_size` 会随之变化，必须**整体替换**（tokenizer、config、模型头）。
+最终结果是：高频词（"the"、"and"）变成单个 token，罕见词（人名、术语）被拆成几个子词片段。模型既不用为每个完整的词占一行词表，序列也不会像纯字符那样长到爆炸。
 
-因此本仓库**显式坚持**：**编码名 `gpt2` ↔ 词表大小 50257 ↔ `configs/config.json` 中 `model.vocab_size`**，三者一致。
-
-### 2.3 为什么用 tiktoken 而不是在 m01 里「从零实现 BPE」
-
-- **主线目标**是打通 **数据 → 模型 → 训练 →（后续）生成**；分词在书中已有成熟库实现，**重复实现 BPE 合并算法**属于原书 **bonus**（`ch02/05_bpe-from-scratch/`），适合扩展学习，而非团队主路径的阻塞项。
-- `tiktoken` 与 PyTorch 训练栈兼容良好，**encode/decode** 行为稳定、可测。
-
-若课程强制「手写 BPE」，应在单独分支或模块中实现，并仍满足下文 **与 `vocab_size` 一致** 的契约；主分支可继续以 `tiktoken` 为默认 Harness。
+GPT-2 用这个方法在大量英文语料上跑出来的最终词表大小是 **50257**。这个数字不是谁拍脑袋定的，而是 256 个基础字节 + 约 5 万次合并操作 + 1 个特殊 token 的结果。
 
 ---
 
-## 3. 特殊 token 策略
+## 分词器在我们项目里做什么
 
-### 3.1 为何需要单独约定
+整条链路是这样的：
 
-`tiktoken` 对某些 **特殊字符串**（如 `<|endoftext|>`）的默认行为是：若出现在正文中且未声明，可能报错或行为与预期不符。训练数据若**拼接多段文档**，常用 `<|endoftext|>` 作为**文档边界**标记，因此必须在 **encode 时显式允许**这类 special。
+```
+"Every effort moves you"
+        │
+        │  encode（分词器）
+        ▼
+  [6109, 3626, 6100, 345]        ← 4 个整数，模型能处理了
+        │
+        │  Embedding 查表
+        ▼
+  4 个向量 → Transformer → logits
+        │
+        │  argmax / 采样
+        ▼
+  [6109, 3626, 6100, 345, 13]    ← 生成了一个新 token
+        │
+        │  decode（分词器）
+        ▼
+  "Every effort moves you."      ← 回到人类可读的文字
+```
 
-### 3.2 本仓库策略
+分词器出现在**最开头**和**最末尾**。训练的时候，分词器把语料变成数字喂给模型；生成的时候，分词器把模型吐出的数字变回文字给人看。
 
-- **调用方**（如 `m02_data_loader` 中对整段文本 `encode`）使用：
-
-  `enc.encode(text, allowed_special={"<|endoftext|>"})`
-
-  与书中常见写法一致，避免无意中将特殊串当普通文本处理。
-- **m01** 提供 **`get_encoding()`**，返回标准 **`tiktoken.Encoding`**，**不**在包内隐藏 `allowed_special` 参数，以便：
-  - 数据管线控制「哪些 special 可出现」；
-  - 与书中「同一 encode API、不同调用场景」的讲法一致。
-
-若未来增加其它 special（如自定义边界符），应在 **数据与 encode 调用处**统一列出，并在本文档与 **HARNESS** 的契约中补充一行说明。
-
----
-
-## 4. 与 `config.json` 的契约：`vocab_size`
-
-模型配置中 **`model.vocab_size`** 必须等于所选用分词器的词表大小：
-
-| 项目 | 值（当前策略） |
-|------|----------------|
-| 编码 | `gpt2` |
-| `tiktoken` 的 `n_vocab` | **50257** |
-| `configs/config.json` → `model.vocab_size` | **50257**（须与上一致） |
-
-**原因（理论落点）**：嵌入矩阵形状为 `(vocab_size, emb_dim)`，输出 logits 为 `(..., vocab_size)`。若 tokenizer 实际 id 超出 `vocab_size - 1` 或配置小于真实词表，会出现**索引越界**或**无效行从未被训练**；若配置大于真实词表，则**浪费参数**且与 softmax 语义不一致。
-
-**工程约定**：修改编码或自训词表时，**先**确定 `vocab_size`，**再**改 `config.json` 与模型构造，并跑通 **HARNESS P1-01 / P1-04** 相关测试。
+所以它的核心职责就一件事：**文字和数字之间的可逆转换**。能 encode，能 decode，`decode(encode(text))` 得到的还是原文。
 
 ---
 
-## 5. 当前策略下「要实现什么」（m01 边界）
+## 50257 这个数字为什么很重要
 
-在 **坚持 tiktoken + gpt2 + 50257** 的前提下，`m01_tokenizer` **实现的是薄封装**，而非重造 BPE：
+分词器的词表大小不只是它自己的事，它直接决定了模型的结构。
 
-| 内容 | 说明 |
-|------|------|
-| **`ENCODING_NAME`** | 固定为 `"gpt2"`，与书中一致。 |
-| **`get_encoding()`** | 返回 `tiktoken.get_encoding("gpt2")`，供全局使用；**encode/decode** 语义与第 2 章一致。 |
-| **`vocab_size()`** | 返回 `get_encoding().n_vocab`，供配置校验与模型构建引用（与 `config` 交叉核对）。 |
+模型的第一层是 Embedding——一张 50257 行的查找表，每个 token id 对应一行向量。模型的最后一层是一个线性层，输出 50257 维的 logits，每一维代表"下一个 token 是这个词的概率"。
 
-**不在 m01 内重复实现**：BPE 合并、词表序列化、字节级预处理——均由 `tiktoken` 完成。
+这意味着三个地方必须用同一个数字：
 
-**与 m02 的衔接**：`m02_data_loader` 取得 encoding 后对**整段文本**做 `encode` 与滑动窗口；m01 保证**词表与配置一致**，m02 保证**序列长度与 `context_length` 一致**。
+```
+分词器的词表大小  ──必须相等──  config 里的 model.vocab_size
+                                    │
+                                    ├── Embedding 的行数
+                                    └── 输出层的列数
+```
+
+如果不一致会怎样？
+
+- **分词器吐出的 id 超过词表范围** → Embedding 查表越界，程序直接崩
+- **config 设小了** → 有些 token 没有对应的 Embedding 行，信息丢失
+- **config 设大了** → 多出来的行永远不会被查到，白白占内存，还会干扰 softmax 的概率分布
+
+所以我们在代码里专门写了一个 `assert_vocab_size()` 函数，训练开始前检查一下。这不是多此一举，是防线。
 
 ---
 
-## 6. 验收与追溯
+## 特殊 token：`<|endoftext|>`
 
-- 需求条目：**[`HARNESS.md`](../HARNESS.md)** 中 **P1-01**（契约、Harness、通过判据）。
-- 原书对照：**`LLMs-from-scratch/ch02/01_main-chapter-code/`**（`ch02.ipynb`、示例语料 `the-verdict.txt`）。
+训练语料通常不只一篇文章。多篇文章拼在一起的时候需要一个"分隔符"，告诉模型"这里是一篇文章的结束"。GPT-2 用的是 `<|endoftext|>` 这个特殊标记。
+
+这带来一个小问题：分词器默认会把 `<|endoftext|>` 当成普通文字一个字一个字地拆开。我们需要告诉它"这是一个整体，不要拆"，也就是在 encode 的时候声明 `allowed_special`。
+
+我们的策略是：**默认允许 `<|endoftext|>`**，因为语料中会用到它。如果你确定文本里不该有任何特殊标记，可以显式传入空集合来禁止。
 
 ---
 
-## 7. 若偏离当前策略（备忘）
+## 为什么用 tiktoken 而不是自己写
 
-| 变动 | 必须同步 |
+BPE 的原理不复杂，但工程实现有很多细节（字节级预处理、UTF-8 对齐、合并规则排序）。我们的主线目标是打通**数据→模型→训练→生成**全链路。分词器本身不是难点，花时间在这里会拖慢进度。
+
+tiktoken 是 OpenAI 开源的 BPE 实现，自带 GPT-2 的合并规则和词表。用它的好处：
+
+- 结果和 GPT-2 完全一致，方便对照调试
+- 不用维护合并规则文件
+- encode/decode 行为确定，测试好写
+
+如果以后想从零实现 BPE（比如用自定义语料训练词表），可以在独立模块中做，只要最终提供同样的 encode/decode 接口、对齐 vocab_size 就行。
+
+---
+
+## 我们的实现：GPT2Tokenizer 类
+
+实现放在 `src/mini_llm/m01_tokenizer/tokenizer.py`，是一个对 tiktoken 的薄封装。
+
+为什么不直接到处调用 tiktoken？因为封装之后，下游模块只依赖我们自己的接口。将来要换编码方案，只改这一个文件，其他地方不用动。
+
+这个类提供的能力：
+
+| 方法 / 属性 | 做什么 |
+|-------------|--------|
+| `encode(text)` | 文本 → token id 列表 |
+| `decode(token_ids)` | token id 列表 → 文本 |
+| `vocab_size` | 词表大小（50257） |
+| `assert_vocab_size(n)` | 检查是否和预期一致，不一致就报错 |
+| `vocab_matches_config(n)` | 同上，但只返回 True/False，不报错 |
+
+`__init__.py` 里创建了一个默认实例，导出模块级的便捷函数（`encode_text`、`decode_token_ids` 等），所以下游可以直接 `from mini_llm.m01_tokenizer import encode_text` 来用，不需要手动创建实例。
+
+---
+
+## 与其他模块的关系
+
+| 谁在用 | 怎么用 |
+|--------|--------|
+| `m02_data_loader` | 调用 `encode_text(语料)` 得到整段 id 序列，然后按滑动窗口切成训练样本 |
+| `m04_model` | 不直接调用分词器，但 Embedding 和输出层的维度必须和 `vocab_size` 一致 |
+| `train.py` | 启动时用 `vocab_matches_config()` 做安全检查；训练中用 encode 编码采样起始文本，用 decode 还原生成结果 |
+| `m05_generate` | 不直接调用分词器，由调用方负责 encode/decode |
+
+**边界划分**：分词器只负责"文字↔数字"。怎么切窗口是 `m02` 的事，模型结构是 `m04` 的事。
+
+---
+
+## 怎么算做完了
+
+对照 HARNESS P1-01，分词器需要通过以下验收：
+
+| 要求 | 怎么验证 |
 |------|----------|
-| 改用其它 `tiktoken` 编码名 | 更新 `ENCODING_NAME`、`vocab_size()` 与 `config.json` 中 `model.vocab_size` |
-| 自训 BPE | 提供与 `tiktoken.Encoding` 可类比的 **encode/decode** 与确定 **`n_vocab`**，并更新配置与 HARNESS |
+| encode 再 decode 能还原 | 英文、中文、emoji 各试一遍 |
+| 词表大小是 50257 | `vocab_size` 属性直接检查 |
+| `<\|endoftext\|>` 能正确编码 | 包含它的文本能往返 |
+| 和 config.json 对齐 | `assert_vocab_size(50257)` 不报错 |
+| 错配能检测到 | `assert_vocab_size(1000)` 必须报错 |
+| 空文本不出错 | `encode("")` 返回空列表，`decode([])` 返回空字符串 |
+| 所有 id 都在合法范围 | encode 任何文本，id 都在 `[0, 50257)` 内 |
+| 可以禁止特殊 token | `allowed_special=set()` 时遇到特殊标记要报错 |
 
-以上变动应视为**新 REQ**，在 `HARNESS.md` 中增行或改 P1-01 契约，避免口头约定。
+这些在 `tests/test_tokenizer.py` 中都有对应的测试用例，目前全部通过。
+
+---
+
+## 如果将来要换方案
+
+| 想做什么 | 需要改什么 |
+|----------|-----------|
+| 换一个 tiktoken 编码（比如 GPT-4 的） | 改 `ENCODING_NAME`，同步更新 config 里的 `vocab_size`，重跑测试 |
+| 用自己语料训练一套 BPE 词表 | 在独立模块里实现，提供同样的 `encode`/`decode` 接口和确定的 `vocab_size`，然后替换默认实例 |
+
+不管怎么换，**词表大小三处一致**这条铁律不变。

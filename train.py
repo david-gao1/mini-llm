@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""预训练入口：损失、优化器、评估、checkpoint。"""
+"""预训练入口：损失、优化器、评估、checkpoint。
+
+P1-06 优化：MPS 设备 / 梯度裁剪 / cosine scheduler / early stopping / temperature 采样。
+"""
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import sys
 from pathlib import Path
@@ -26,8 +30,31 @@ def _set_seed(seed: int) -> None:
 
 def _pick_device(preference: str) -> torch.device:
     if preference == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
     return torch.device(preference)
+
+
+def _build_scheduler(
+    optimizer: torch.optim.Optimizer,
+    total_steps: int,
+    warmup_ratio: float,
+    min_lr_ratio: float,
+) -> torch.optim.lr_scheduler.LambdaLR:
+    """Warmup 线性升温 + cosine 衰减。"""
+    warmup_steps = int(total_steps * warmup_ratio)
+
+    def lr_lambda(step: int) -> float:
+        if step < warmup_steps:
+            return step / max(warmup_steps, 1)
+        progress = (step - warmup_steps) / max(total_steps - warmup_steps, 1)
+        cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+        return min_lr_ratio + (1.0 - min_lr_ratio) * cosine
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
 def calc_loss_batch(
@@ -89,8 +116,8 @@ def main() -> int:
     from mini_llm import m01_tokenizer as tok_mod
     from mini_llm.m01_tokenizer import decode_token_ids, encode_text
     from mini_llm.m02_data_loader import load_text, train_val_dataloaders
-    from mini_llm.m05_generate import generate_text_simple
     from mini_llm.m04_model import GPTModel
+    from mini_llm.m05_generate import generate
 
     model_cfg = cfg["model"]
     train_cfg = cfg["train"]
@@ -129,20 +156,36 @@ def main() -> int:
         return 1
 
     device = _pick_device(str(cfg.get("device", "auto")))
+    print(f"Device: {device}")
+
     model = GPTModel(model_cfg).to(device)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"Model parameters: {n_params:,} ({n_params / 1e6:.1f}M)")
+
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=float(train_cfg["learning_rate"]),
         weight_decay=float(train_cfg["weight_decay"]),
     )
 
-    global_step = 0
+    num_epochs = int(train_cfg["num_epochs"])
+    total_steps = num_epochs * len(train_loader)
 
+    warmup_ratio = float(train_cfg.get("warmup_ratio", 0.1))
+    min_lr_ratio = float(train_cfg.get("min_lr_ratio", 0.1))
+    scheduler = _build_scheduler(optimizer, total_steps, warmup_ratio, min_lr_ratio)
+
+    grad_clip = float(train_cfg.get("grad_clip", 1.0))
+    patience = int(train_cfg.get("patience", 0))
+
+    global_step = 0
     eval_freq = int(train_cfg["eval_freq"])
     eval_iter = int(train_cfg["eval_iter"])
     ckpt_every = int(train_cfg["checkpoint_every_steps"])
-    num_epochs = int(train_cfg["num_epochs"])
     start_context = str(train_cfg.get("start_context", "Every effort moves you"))
+
+    best_val_loss = float("inf")
+    patience_counter = 0
 
     def text_to_ids(s: str) -> torch.Tensor:
         ids = encode_text(s)
@@ -153,60 +196,83 @@ def main() -> int:
         ctx_len = model_cfg["context_length"]
         encoded = text_to_ids(start_context)
         with torch.no_grad():
-            out = generate_text_simple(
+            out = generate(
                 model,
                 encoded,
                 max_new_tokens=50,
                 context_size=ctx_len,
+                temperature=0.8,
+                top_k=25,
             )
         flat = out.squeeze(0).tolist()
         print(decode_token_ids(flat).replace("\n", " "))
         model.train()
 
     ckpt_path = out_root / "checkpoint_latest.pt"
+    best_path = out_root / "checkpoint_best.pt"
+
+    def _save_checkpoint(path: Path, epoch: int) -> None:
+        torch.save(
+            {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "global_step": global_step,
+                "epoch": epoch,
+                "best_val_loss": best_val_loss,
+                "config": cfg,
+            },
+            path,
+        )
+
+    early_stopped = False
 
     for epoch in range(num_epochs):
+        if early_stopped:
+            break
         model.train()
         for input_batch, target_batch in train_loader:
             optimizer.zero_grad(set_to_none=True)
             loss = calc_loss_batch(input_batch, target_batch, model, device)
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip)
             optimizer.step()
+            scheduler.step()
             global_step += 1
 
             if global_step % eval_freq == 0:
                 tr, va = evaluate_model(model, train_loader, val_loader, device, eval_iter)
+                lr_now = optimizer.param_groups[0]["lr"]
                 print(
                     f"Epoch {epoch + 1}  Step {global_step:06d}  "
-                    f"train_loss={tr:.4f}  val_loss={va:.4f}"
+                    f"train_loss={tr:.4f}  val_loss={va:.4f}  "
+                    f"lr={lr_now:.6f}"
                 )
 
+                if va < best_val_loss:
+                    best_val_loss = va
+                    patience_counter = 0
+                    _save_checkpoint(best_path, epoch)
+                    print(f"  -> New best val_loss={va:.4f}, saved -> {best_path}")
+                else:
+                    patience_counter += 1
+                    if patience > 0 and patience_counter >= patience:
+                        print(
+                            f"  -> Early stopping: val_loss not improved for "
+                            f"{patience} evaluations (best={best_val_loss:.4f})"
+                        )
+                        early_stopped = True
+                        break
+
             if global_step % ckpt_every == 0:
-                torch.save(
-                    {
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "global_step": global_step,
-                        "epoch": epoch,
-                        "config": cfg,
-                    },
-                    ckpt_path,
-                )
+                _save_checkpoint(ckpt_path, epoch)
                 print(f"Saved checkpoint -> {ckpt_path}")
 
         print_sample()
 
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "global_step": global_step,
-            "epoch": num_epochs,
-            "config": cfg,
-        },
-        ckpt_path,
-    )
+    _save_checkpoint(ckpt_path, num_epochs if not early_stopped else epoch)
     print(f"Done. Final checkpoint -> {ckpt_path}")
+    if best_path.exists():
+        print(f"Best checkpoint (val_loss={best_val_loss:.4f}) -> {best_path}")
     return 0
 
 

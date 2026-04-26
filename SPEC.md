@@ -15,10 +15,12 @@
 | `m02_data_loader` | P1-02 | done | done | — |
 | `m03_attention` | P1-03 | done | done | — |
 | `m04_model` | P1-04 | done | done | — |
-| `train.py` | P1-05 | done | todo | 端到端训练未跑（依赖数据下载） |
+| `train.py` | P1-05 | done | done | — |
+| `train.py` 优化 | P1-06 | done | done | — |
+| GPT-2 Medium + 大语料 | P1-07 | todo | todo | 依赖 P1-06 |
 | `m05_generate` | P2-01 | done | done | — |
-| **闸门 M1** | — | — | blocked | 端到端训练未验证 |
-| **闸门 M2** | — | — | blocked | 依赖 M1 checkpoint |
+| **闸门 M1** | — | — | done | — |
+| **闸门 M2** | — | — | done | — |
 
 ---
 
@@ -343,16 +345,82 @@ generate(model, idx, max_new_tokens, context_size, *, temperature=1.0, top_k=Non
 | 3 | P1-03 attention 用例通过 | done |
 | 4 | P1-04 model forward 形状匹配 | done |
 | 5 | `pytest` 全量绿（24/24） | done |
-| 6 | `train.py` 跑若干 step，train/val loss 为有限实数 | 未验证 |
-| 7 | `runs/team_gpt/checkpoint_latest.pt` 写出 | 未验证 |
+| 6 | `train.py` 跑若干 step，train/val loss 为有限实数 | done |
+| 7 | `runs/team_gpt/checkpoint_latest.pt` 写出 | done |
 
-**解除路径**：`uv run python train.py --config configs/config.json` 验证 loss 有限 + checkpoint 写出。
+已验证：100 epoch 训练完成，train_loss=0.005，checkpoint 正常写出。
 
 ### M2 — 训练→生成链路
 
 | # | 前置条件 | 状态 |
 |---|----------|------|
-| 1 | M1 闸门通过 | blocked |
-| 2 | 加载 checkpoint 跑 `generate`，输出非空可 decode 文本 | 未验证 |
+| 1 | M1 闸门通过 | done |
+| 2 | 加载 checkpoint 跑 `generate`，输出非空可 decode 文本 | done |
 
-**解除路径**：M1 通过后，加载 checkpoint 调用 `generate()` 验证输出。
+已验证：生成文本通顺可 decode，Epoch 30 后输出完整英语句子。
+
+---
+
+## P1-06 · `train.py` 训练优化
+
+**源码** `train.py`（项目根目录）
+**REQ 文档** [`docs/REQ-P1-06_TrainOptimize.md`](docs/REQ-P1-06_TrainOptimize.md)
+
+### 优化内容
+
+| # | 优化项 | 说明 |
+|---|--------|------|
+| 1 | MPS 设备支持 | `_pick_device` 增加 MPS 分支，M3 Max 加速 |
+| 2 | 梯度裁剪 | `clip_grad_norm_` 防止梯度爆炸 |
+| 3 | 学习率调度 | warmup + cosine annealing 衰减 |
+| 4 | Early stopping | val_loss 不降时提前终止 + best checkpoint |
+| 5 | 采样多样性 | `print_sample` 改用 temperature + top-k |
+
+### 配置新增字段
+
+| config.json 字段 | 默认值 | 用途 |
+|-------------------|--------|------|
+| `train.grad_clip` | 1.0 | 梯度裁剪阈值 |
+| `train.warmup_ratio` | 0.1 | warmup 占总步数比例 |
+| `train.min_lr_ratio` | 0.1 | cosine 衰减到 lr 的下限比例 |
+| `train.patience` | 10 | early stopping 容忍次数（0=不启用） |
+
+### 实现状态
+
+`done` — 已实现。
+
+### 测试覆盖
+
+24/24 全绿（未引入新测试，复用现有套件）。
+
+### 阻塞项
+
+无。
+
+---
+
+## P1-07 · GPT-2 Medium + WikiText-2
+
+**配置** `configs/config_medium.json`
+**REQ 文档** [`docs/REQ-P1-07_GPT2Medium.md`](docs/REQ-P1-07_GPT2Medium.md)
+
+### 升级内容
+
+| 项 | 原配置（config.json） | 新配置（config_medium.json） |
+|----|:---:|:---:|
+| 语料 | the-verdict.txt (~20KB) | WikiText-2 train (~10MB) |
+| emb_dim | 384 | 1024 |
+| n_heads | 6 | 16 |
+| n_layers | 6 | 24 |
+| context_length | 256 | 1024 |
+| 参数量 | ~29M | ~355M |
+| batch_size | 8 | 1 |
+| 内存估算 | ~0.7 GB | ~12-14 GB |
+
+### 实现状态
+
+`todo` — 配置文件已就绪，待运行验证。
+
+### 阻塞项
+
+依赖 P1-06 已完成（MPS / scheduler / early stopping）。

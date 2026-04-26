@@ -13,6 +13,19 @@
 | [process/testing.md](process/testing.md) | 测试流程规范：测试分层、用例编写、回归策略 |
 | [process/iteration.md](process/iteration.md) | 迭代与发布流程：版本管理、技术债、复盘 |
 
+## REQ 需求文档
+
+| 文档 | REQ | 状态 |
+|------|-----|------|
+| [REQ-P1-01_Tokenizer.md](REQ-P1-01_Tokenizer.md) | P1-01 GPT-2 BPE 分词器 | ✅ 已完成 |
+| [REQ-P1-02_DataLoader.md](REQ-P1-02_DataLoader.md) | P1-02 滑动窗口 Dataset 与 DataLoader | ✅ 已完成 |
+| [REQ-P1-03_Attention.md](REQ-P1-03_Attention.md) | P1-03 多头因果自注意力 | ✅ 已完成 |
+| [REQ-P1-04_Model.md](REQ-P1-04_Model.md) | P1-04 GPT 模型 | ✅ 已完成 |
+| [REQ-P1-05_Train.md](REQ-P1-05_Train.md) | P1-05 预训练循环 | ✅ 已完成 |
+| [REQ-P1-06_TrainOptimize.md](REQ-P1-06_TrainOptimize.md) | P1-06 训练优化（过拟合治理 + 设备加速） | ✅ 已完成 |
+| [REQ-P1-07_GPT2Medium.md](REQ-P1-07_GPT2Medium.md) | P1-07 GPT-2 Medium + WikiText-2 | todo |
+| [REQ-P2-01_Generate.md](REQ-P2-01_Generate.md) | P2-01 自回归文本生成 | ✅ 已完成 |
+
 ## 模块设计文档
 
 | 文档 | 说明 |

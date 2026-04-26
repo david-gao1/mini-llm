@@ -9,22 +9,26 @@
   },
   "model": {
     "vocab_size": 50257,
-    "context_length": 64,
-    "emb_dim": 128,
-    "n_heads": 4,
-    "n_layers": 2,
-    "drop_rate": 0.1,
+    "context_length": 256,
+    "emb_dim": 384,
+    "n_heads": 6,
+    "n_layers": 6,
+    "drop_rate": 0.2,
     "qkv_bias": false
   },
   "train": {
     "learning_rate": 0.0003,
-    "weight_decay": 0.1,
-    "num_epochs": 1,
+    "weight_decay": 0.2,
+    "num_epochs": 50,
     "batch_size": 8,
-    "eval_freq": 5,
-    "eval_iter": 1,
-    "checkpoint_every_steps": 50,
-    "start_context": "Every effort moves you"
+    "eval_freq": 20,
+    "eval_iter": 5,
+    "checkpoint_every_steps": 200,
+    "start_context": "Every effort moves you",
+    "grad_clip": 1.0,
+    "warmup_ratio": 0.1,
+    "min_lr_ratio": 0.1,
+    "patience": 10
   },
   "device": "auto",
   "output_dir": "runs"

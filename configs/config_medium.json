@@ -1,0 +1,35 @@
+{
+  "run_name": "gpt2_medium_wikitext2",
+  "seed": 42,
+  "data": {
+    "url": "https://raw.githubusercontent.com/pytorch/examples/main/word_language_model/data/wikitext-2/train.txt",
+    "filename": "wikitext2_train.txt",
+    "train_ratio": 0.95,
+    "max_chars": null
+  },
+  "model": {
+    "vocab_size": 50257,
+    "context_length": 1024,
+    "emb_dim": 1024,
+    "n_heads": 16,
+    "n_layers": 24,
+    "drop_rate": 0.1,
+    "qkv_bias": false
+  },
+  "train": {
+    "learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "num_epochs": 10,
+    "batch_size": 1,
+    "eval_freq": 100,
+    "eval_iter": 10,
+    "checkpoint_every_steps": 500,
+    "start_context": "The history of",
+    "grad_clip": 1.0,
+    "warmup_ratio": 0.1,
+    "min_lr_ratio": 0.1,
+    "patience": 20
+  },
+  "device": "auto",
+  "output_dir": "runs"
+}

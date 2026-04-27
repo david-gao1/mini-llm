@@ -1,9 +1,9 @@
-# REQ-P1-07：GPT-2 Medium 规模训练 + WikiText-2 语料
+# REQ-P1-07：GPT-2 Medium 规模训练 + WikiText 语料
 
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模型与数据升级  
 **依赖**：[REQ-P1-06](REQ-P1-06_TrainOptimize.md)（训练优化已到位：MPS / scheduler / early stopping）  
 **被依赖**：无  
-**状态**：todo
+**状态**：进行中（WikiText-2 已完成 → WikiText-103 训练中）
 
 ---
 
@@ -14,42 +14,48 @@ P1-01 到 P1-06 使用的是 29M 参数模型 + 20KB 短篇小说（the-verdict.
 - **模型太小**：29M 参数，只有 6 层 Transformer，表达能力有限
 - **语料太小**：20KB 文本，模型几十个 epoch 就能完全背诵，无法观察真正的语言建模能力
 
-升级到 **GPT-2 Medium（355M 参数）** + **WikiText-2（10MB 维基百科文章）** 后：
+升级到 **GPT-2 Medium（406M 参数）** + **WikiText 语料** 后：
 
 - 模型参数量增长 **12 倍**，24 层 Transformer，接近工业级小模型的架构
-- 语料增长 **500 倍**，模型不可能背诵，必须学习真正的语言模式
-- 在 M3 Max 36GB 上可行：预估内存占用 ~12-14 GB，MPS 加速
+- 语料从 20KB → 10MB（WikiText-2）→ **500MB（WikiText-103）**，逐步验证
+- 在 M3 Max 36GB 上可行：预估内存占用 ~14-17 GB，MPS 加速
 
-这一步是从"教学验证"到"实际训练"的跨越。
+分两阶段推进：
+1. **WikiText-2（已完成）**：10MB 语料，快速验证架构正确性，暴露了过拟合瓶颈
+2. **WikiText-103（进行中）**：500MB 语料（50 倍），从根本上缓解过拟合，使用 raw 版本消除 `<unk>` 问题
 
 ---
 
 ## 2. 设计思路（怎么做）
 
-**方案**：零代码改动，仅新增一份配置文件 `configs/config_medium.json`。
+**方案**：小幅改动 `load_text` 支持 HuggingFace 数据源 + 新配置文件。
 
-**为什么不改代码（方案 A）**：
-- WikiText-2 的 train.txt 是一个完整文本文件，与 the-verdict.txt 格式完全兼容
-- 现有的 `load_text` 三级回退 + URL 下载缓存机制直接适用
-- 现有的 `train_val_dataloaders` 按字符比例 split 足够（0.95 train / 0.05 val）
-- 不动代码 = 不引入新 bug，已有 24 个测试继续保护
+**阶段一 WikiText-2**：
+- 零代码改动，仅配置文件，URL 直接下载 train.txt
+- batch_size=1, num_epochs=10, patience=20
+- 目的：快速验证架构 + 暴露瓶颈
 
-**为什么选 WikiText-2 而非 WikiText-103**：
-- WikiText-103 有 181MB，355M 模型在 M3 Max 上训一轮要几小时
-- WikiText-2 的 10MB 规模与 355M 模型匹配更好，10 epoch 约 1-2 小时可完成
-- 作为教学项目，能在合理时间内看到结果更重要
+**阶段二 WikiText-103（当前）**：
+- `load_text` 新增 `source="huggingface"` 模式，通过 HuggingFace `datasets` 库下载
+- 使用 **raw 版本**（`wikitext-103-raw-v1`）：原始文本，无 `<unk>` 预处理产物
+- batch_size=4（36GB 内存富余），num_epochs=3（大语料不需要多轮）
 
-**为什么 context_length 可以上 1024**：
-- M3 Max 36GB 统一内存，batch_size=1 时内存约 12-14 GB
-- 1024 context 让模型看到更长的上下文依赖，WikiText-2 的段落正好需要这个长度
-- GPT-2 原版就是 1024 context
+**为什么从 WikiText-2 升级到 WikiText-103**：
+- WikiText-2 训练结果（Run 2）显示 Epoch 5 后 train/val gap 达 2.0，**数据量是核心瓶颈**
+- WikiText-103 数据量 50 倍，参数/数据比从 ~160:1 改善为 ~3:1，大幅缓解过拟合
+- 使用 raw 版本消除 `<unk>` 污染问题
+
+**为什么用 HuggingFace 而非 URL 直下**：
+- WikiText-103 原始 S3 托管链接已失效（403 Forbidden）
+- HuggingFace Datasets 是标准替代方案，自动下载 + 缓存 + 版本管理
+- 下载后转存为本地 txt，后续训练离线复用
 
 **关键设计决策**：
-- `batch_size=1`（内存安全）配合 1024 context
-- `num_epochs=10`（10MB 语料不需要太多轮）
-- `patience=5`（大语料收敛更慢，早停宽松一些）
-- `start_context="The history of"`（维基百科风格的起始文本）
-- `drop_rate=0.1`（大语料过拟合风险低，不需要激进正则化）
+- `batch_size=4`（M3 Max 36GB，4 × 1024 context 内存约 14-17 GB）
+- `num_epochs=3`（500MB 语料 × 3 轮，大模型预训练通常 1-2 轮即可）
+- `eval_freq=500`（步数多，降低评估频率）
+- `patience=20`（WikiText-2 实验验证的合理值）
+- `drop_rate=0.1`（大语料过拟合风险低）
 
 ---
 
@@ -92,13 +98,14 @@ uv run python train.py --config configs/config_medium.json
 
 ### 数据源
 
-| 项 | 详情 |
-|----|------|
-| 数据集 | WikiText-2（Salesforce / PyTorch examples 托管） |
-| 下载 URL | `https://raw.githubusercontent.com/pytorch/examples/main/word_language_model/data/wikitext-2/train.txt` |
-| 文件大小 | ~10 MB |
-| 内容 | 维基百科优质文章，英语长文，保留章节结构 |
-| token 数 | ~2.5M tokens（GPT-2 BPE） |
+| 项 | WikiText-2（阶段一，已完成） | WikiText-103 raw（阶段二，当前） |
+|----|---|---|
+| 数据集 | WikiText-2 tokenized | WikiText-103 raw v1 |
+| 来源 | PyTorch examples URL 直下 | HuggingFace `datasets` 库 |
+| HF 路径 | — | `Salesforce/wikitext` / `wikitext-103-raw-v1` |
+| 文件大小 | ~10 MB | **~500 MB** |
+| token 数 | ~2.5M | **~130M** |
+| `<unk>` 问题 | 有（tokenized 版本低频词被替换） | **无（raw 版本保留原始文本）** |
 
 ### 模型配置
 
@@ -136,42 +143,42 @@ uv run python train.py --config configs/config_medium.json
 
 > **与标准 GPT-2 Medium（355M）的差异**：标准 GPT-2 的 Token Embedding 和 LM Head **共享权重**（weight tying），节省了 ~51M 参数。本项目为教学清晰起见，两者独立，因此总参数量略大。
 
-### 训练超参详解
+### 训练超参详解（WikiText-103 当前配置）
 
-| 参数 | 值 | 说明 |
-|------|------|------|
-| `learning_rate` | 3e-4 | AdamW 初始学习率；配合 cosine scheduler 衰减 |
-| `weight_decay` | 0.1 | 权重衰减正则化；大语料上不需要太激进 |
-| `num_epochs` | 10 | 10MB 语料 × 10 轮 ≈ 25M token 的训练量 |
-| `batch_size` | 1 | context=1024 时单 batch 占内存 ~12GB，batch=1 确保不 OOM |
-| `eval_freq` | 100 | 每 100 步评估一次 train/val loss |
-| `eval_iter` | 10 | 评估时取 10 个 batch 的平均，结果更稳定 |
-| `checkpoint_every_steps` | 500 | 每 500 步保存一次 latest checkpoint |
-| `grad_clip` | 1.0 | 梯度裁剪阈值，防止大模型训练中的梯度爆炸 |
-| `warmup_ratio` | 0.1 | 前 10% 步数线性升温（0→lr），避免初始阶段大梯度 |
-| `min_lr_ratio` | 0.1 | cosine 衰减下限 = lr × 0.1 = 3e-5 |
-| `patience` | 5 | 连续 5 次评估 val_loss 不创新低则 early stop |
-| `start_context` | "The history of" | 维基百科风格的生成起始文本 |
+| 参数 | 值 | 对比 WikiText-2 | 说明 |
+|------|------|------|------|
+| `learning_rate` | 3e-4 | 不变 | AdamW 初始学习率；配合 cosine scheduler 衰减 |
+| `weight_decay` | 0.1 | 不变 | 权重衰减正则化 |
+| `num_epochs` | **3** | 10→3 | 500MB 语料不需要多轮，1-2 轮已充分 |
+| `batch_size` | **4** | 1→4 | 36GB 内存富余，4× 吞吐提速，每步处理 4096 token |
+| `eval_freq` | **500** | 100→500 | 步数多（~32K/epoch），降低评估频率 |
+| `eval_iter` | 10 | 不变 | 评估时取 10 个 batch 的平均 |
+| `checkpoint_every_steps` | **2000** | 500→2000 | 步数多，降低 IO 频率 |
+| `grad_clip` | 1.0 | 不变 | 梯度裁剪阈值 |
+| `warmup_ratio` | 0.1 | 不变 | 前 10% 步数线性升温 |
+| `min_lr_ratio` | 0.1 | 不变 | cosine 衰减下限 = 3e-5 |
+| `patience` | 20 | 不变 | WikiText-2 实验验证的合理值 |
+| `start_context` | "The history of" | 不变 | 维基百科风格的生成起始文本 |
 
-### 内存估算（M3 Max 36GB）
+### 内存估算（M3 Max 36GB，WikiText-103 配置）
 
 | 项 | 估算 | 说明 |
 |----|-----:|------|
 | 模型参数（float32） | 1.6 GB | 406M × 4 bytes |
 | 梯度 | 1.6 GB | 与参数等大 |
 | AdamW 状态（动量 + 方差） | 3.2 GB | 参数量 × 2 × 4 bytes |
-| 激活值（batch=1, context=1024） | ~6 GB | 24 层 × 中间张量 |
-| **总计** | **~12-14 GB** | 36GB 内存富余 |
+| 激活值（batch=4, context=1024） | ~8 GB | batch_size ×4 → 激活等比增大 |
+| 数据集张量 | ~0.8 GB | 130M tokens × 8 bytes |
+| **总计** | **~15-17 GB** | 36GB 内存仍有余量 |
 
 ### 训练规模估算
 
-| 项 | 估算 |
-|----|------|
-| 训练集 token 数 | ~2.4M tokens |
-| 每 epoch 步数（batch=1, stride=1024） | ~2,200 步 |
-| 10 epoch 总步数 | ~22,000 步 |
-| 单 epoch 时间（M3 Max MPS） | ~8-12 分钟 |
-| 总训练时间（可能 early stop） | ~1-2 小时 |
+| 项 | WikiText-2（已完成） | WikiText-103（当前） |
+|----|------|------|
+| 训练集 token 数 | ~2.4M | **~130M** |
+| 每 epoch 步数 | ~2,200（batch=1） | **~31,700（batch=4）** |
+| 总步数（全 epoch） | ~22,000（10 ep） | **~95,000（3 ep）** |
+| 预计总训练时间 | ~2 小时 | **~20-30 小时**（可能 early stop） |
 
 ### 输出
 
@@ -185,14 +192,15 @@ uv run python train.py --config configs/config_medium.json
 
 | # | 规则 | 说明 | 示例 |
 |---|------|------|------|
-| R1 | 零代码改动 | 仅新增 config 文件，不改 m01-m05 和 train.py | 方案 A |
-| R2 | 独立 run 目录 | `run_name="gpt2_medium_wikitext2"`，不覆盖原有 team_gpt | 两套实验并存 |
-| R3 | 自动下载缓存 | 首次运行下载 WikiText-2 到 `data_cache/`，后续离线复用 | ~10MB |
-| R4 | 字符比例 split | 0.95 train / 0.05 val，与现有逻辑一致 | ~9.5MB / ~0.5MB |
-| R5 | batch_size=1 | 1024 context + 355M 参数，单 batch 确保内存安全 | ~12-14GB |
-| R6 | MPS 加速 | M3 Max 自动选择 MPS（P1-06 已支持） | device="auto" |
-| R7 | Early stopping | patience=20，大模型 loss 波动大需更多容忍 | 连续 20 次不降则停 |
-| R8 | 原有 config 不动 | `configs/config.json` 保持 29M 小模型配置 | 可随时回退 |
+| R1 | 最小代码改动 | `load_text` 新增 `source="huggingface"` 模式，其余 m01-m05 不动 | 向后兼容 |
+| R2 | 独立 run 目录 | `run_name="gpt2_medium_wikitext103"`，不覆盖原有实验 | 多套实验并存 |
+| R3 | HuggingFace 下载 + 缓存 | 首次运行通过 `datasets` 库下载，转存本地 txt，后续离线复用 | ~500MB |
+| R4 | Raw 版本 | 使用 `wikitext-103-raw-v1`（原始文本），不含 `<unk>` 预处理产物 | 消除 unk 污染 |
+| R5 | 字符比例 split | 0.95 train / 0.05 val，与现有逻辑一致 | ~475MB / ~25MB |
+| R6 | batch_size=4 | 36GB 内存富余（预估 15-17GB），4× 吞吐提速 | 可调到 8 |
+| R7 | MPS 加速 | M3 Max 自动选择 MPS（P1-06 已支持） | device="auto" |
+| R8 | Early stopping | patience=20，WikiText-2 实验验证的合理值 | 连续 20 次不降则停 |
+| R9 | 原有 config 不动 | `configs/config.json` 保持小模型配置 | 可随时回退 |
 
 ---
 
@@ -201,14 +209,14 @@ uv run python train.py --config configs/config_medium.json
 | # | 场景 | 预期 |
 |---|------|------|
 | AC1 | 启动训练 | 日志显示 `Device: mps`，`Model parameters: ~355M` |
-| AC2 | 数据下载 | `runs/gpt2_medium_wikitext2/data_cache/wikitext2_train.txt` 存在（~10MB） |
+| AC2 | 数据下载 | `runs/gpt2_medium_wikitext103/data_cache/wikitext103_raw_train.txt` 存在（~500MB） |
 | AC3 | 首个 eval | train_loss 接近 ln(50257) ≈ 10.8（随机初始化） |
 | AC4 | 训练 2-3 epoch 后 | train_loss 明显下降（< 5），val_loss 同步下降 |
-| AC5 | 训练结束 | val_loss < train_loss 的差距远小于 the-verdict 实验（过拟合轻微） |
-| AC6 | 生成文本 | 与维基百科风格相似的英语段落（有章节标题、事实性描述） |
+| AC5 | 训练结束 | val_loss 与 train_loss 差距 < 1.0（过拟合可控） |
+| AC6 | 生成文本 | 维基百科风格英语段落，无 `<unk>` 污染 |
 | AC7 | checkpoint | `checkpoint_latest.pt` 和 `checkpoint_best.pt` 均存在 |
-| AC8 | 内存 | 训练过程中不 OOM，M3 Max 36GB 足够 |
-| AC9 | 总时间 | 10 epoch 在 1-2 小时内完成 |
+| AC8 | 内存 | 训练过程中不 OOM，峰值 < 20GB |
+| AC9 | val_loss | 优于 WikiText-2 实验的 5.44（数据量 50× 应有显著提升） |
 
 ---
 
@@ -228,16 +236,75 @@ uv run python train.py --config configs/config_medium.json
 
 **调整**：`patience` 从 5 → **20**（容忍 2000 步波动），重新运行。
 
+### Run 2（2026-04-27）— patience=20，训练充分，WikiText-2 最终轮
+
+| 指标 | 值 |
+|------|------|
+| 总步数 | 13,300 / 22,000（60%） |
+| 实际 epoch | 6 / 10 |
+| 最佳 val_loss | **5.4392**（Step 11300，Epoch 5） |
+| 困惑度（perplexity） | e^5.4392 ≈ **230** |
+| Early stop | Step 13300 触发（patience=20，Epoch 6 中段） |
+| 学习率 | warmup 0→3e-4（Step 0-2200），cosine 衰减至 1.48e-4 |
+
+**val_loss 下降曲线（关键节点）**：
+
+| Step | Epoch | val_loss | 事件 |
+|------|-------|----------|------|
+| 100 | 1 | 8.2206 | 随机初始化 |
+| 1000 | 1 | 6.2070 | warmup 阶段快速下降 |
+| 1700 | 1 | 6.0600 | Epoch 1 结束前 |
+| 2200 | 1→2 | 6.0412 | warmup 结束，lr 到达峰值 3e-4 |
+| 3000 | 2 | 5.8211 | 进入 cosine 衰减 |
+| 4500 | 2 | 5.7296 | Epoch 2 结束前 |
+| 6800 | 3 | 5.5802 | |
+| 9000 | 4 | 5.4942 | |
+| 11300 | 5 | **5.4392** | **最佳** |
+| 13300 | 6 | 5.4798 | early stop 触发 |
+
+**过拟合分析**：
+
+| Epoch | train_loss | val_loss | gap | 状态 |
+|-------|-----------|----------|-----|------|
+| 1 | 5.2 - 6.4 | 6.0 - 6.4 | ~0.3 | 健康 |
+| 2 | 5.0 - 5.5 | 5.7 - 6.0 | ~0.7 | 轻微 |
+| 3 | 4.3 - 4.9 | 5.6 - 5.7 | ~1.0 | 中等 |
+| 4 | 4.0 - 4.6 | 5.5 - 5.6 | ~1.2 | 中等 |
+| 5 | 3.6 - 4.1 | 5.4 - 5.5 | ~1.4 | 偏大 |
+| **6** | **3.3 - 3.8** | **5.47 - 5.56** | **~2.0** | **明显过拟合** |
+
+**生成质量逐 epoch 变化**：
+
+| Epoch | 生成样本（start_context = "The history of"） | 评价 |
+|-------|----------------------------------------------|------|
+| 1 | `...the <unk> 's <unk> to be not survived . The fort , and the <unk>...` | 有句式，大量 `<unk>` |
+| 2 | `...the United States . Astr <unk> , the other and some of the <unk>` | 出现实体名 |
+| 3 | `...the area of the first of five years 's death . This is located at...` | 句子结构完整 |
+| 4 | `...In the church 's political situation , the late 1669 , and the <unk>...` | 出现年份，有历史语境 |
+| 5 | `...the British , including the German positions ; this was appointed to the Royal Society...` | **最佳**，语义连贯 |
+| 6 | `...the U.S. state that had been...The U.S. U.S. cru. Army...` | 开始重复，退化 |
+
+**诊断**：
+- patience=20 效果良好，模型在合理时机停止
+- val_loss=5.44（困惑度 230）是 406M 模型在 ~10MB 数据上从零训练的合理水平
+- 核心瓶颈是 **数据量不足**（10MB 对 406M 参数太少，参数/数据比严重失衡）
+- `<unk>` 是 WikiText-2 数据集本身的预处理产物（低频词被替换），非模型 bug
+- 参考：预训练 GPT-2 Medium 在 WikiText-2 上困惑度 ≈ 22（用了 40GB WebText）
+
+**决策**：切换到 **WikiText-103**（~500MB，50× 数据量），从根本上缓解过拟合。
+
 ---
 
 ## 8. 代码落位与依赖
 
 | 项 | 路径 |
 |----|------|
-| 配置文件（新增） | `configs/config_medium.json` |
+| 配置文件 | `configs/config_medium.json` |
+| 数据加载（修改） | `src/mini_llm/m02_data_loader/__init__.py`（新增 `_load_from_huggingface`） |
 | 训练脚本（复用） | `train.py` |
-| 数据缓存 | `runs/gpt2_medium_wikitext2/data_cache/wikitext2_train.txt` |
-| Latest checkpoint | `runs/gpt2_medium_wikitext2/checkpoint_latest.pt` |
-| Best checkpoint | `runs/gpt2_medium_wikitext2/checkpoint_best.pt` |
-| 数据源 URL | `https://raw.githubusercontent.com/pytorch/examples/main/word_language_model/data/wikitext-2/train.txt` |
+| 数据缓存 | `runs/gpt2_medium_wikitext103/data_cache/wikitext103_raw_train.txt` |
+| Latest checkpoint | `runs/gpt2_medium_wikitext103/checkpoint_latest.pt` |
+| Best checkpoint | `runs/gpt2_medium_wikitext103/checkpoint_best.pt` |
+| 数据源 | HuggingFace `Salesforce/wikitext` / `wikitext-103-raw-v1` |
+| 新增依赖 | `datasets>=2.14.0`（pyproject.toml） |
 | 硬件要求 | M3 Max 36GB（MPS 加速），或同等 CUDA GPU |

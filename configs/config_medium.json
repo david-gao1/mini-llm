@@ -1,9 +1,12 @@
 {
-  "run_name": "gpt2_medium_wikitext2",
+  "run_name": "gpt2_medium_wikitext103",
   "seed": 42,
   "data": {
-    "url": "https://raw.githubusercontent.com/pytorch/examples/main/word_language_model/data/wikitext-2/train.txt",
-    "filename": "wikitext2_train.txt",
+    "source": "huggingface",
+    "hf_path": "Salesforce/wikitext",
+    "hf_name": "wikitext-103-raw-v1",
+    "hf_split": "train",
+    "filename": "wikitext103_raw_train.txt",
     "train_ratio": 0.95,
     "max_chars": null
   },
@@ -19,11 +22,11 @@
   "train": {
     "learning_rate": 0.0003,
     "weight_decay": 0.1,
-    "num_epochs": 10,
-    "batch_size": 1,
-    "eval_freq": 100,
+    "num_epochs": 3,
+    "batch_size": 4,
+    "eval_freq": 500,
     "eval_iter": 10,
-    "checkpoint_every_steps": 500,
+    "checkpoint_every_steps": 2000,
     "start_context": "The history of",
     "grad_clip": 1.0,
     "warmup_ratio": 0.1,

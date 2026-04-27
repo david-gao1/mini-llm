@@ -49,18 +49,57 @@ def _sibling_book_corpus(filename: str) -> Path | None:
     return None
 
 
+def _load_from_huggingface(data_cfg: dict[str, Any], cache_dir: Path | None) -> str:
+    """通过 HuggingFace datasets 库下载语料并缓存为本地 txt。"""
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        raise ImportError(
+            "HuggingFace datasets library required: pip install datasets"
+        )
+
+    filename = data_cfg["filename"]
+    if cache_dir is not None:
+        local = cache_dir / filename
+        if local.is_file():
+            print(f"  [HF cache hit] {local}")
+            return local.read_text(encoding="utf-8")
+
+    hf_path = data_cfg["hf_path"]
+    hf_name = data_cfg["hf_name"]
+    hf_split = data_cfg.get("hf_split", "train")
+
+    print(f"  Downloading {hf_path}/{hf_name} split={hf_split} via HuggingFace ...")
+    ds = load_dataset(hf_path, hf_name, split=hf_split)
+    text = "\n".join(row["text"] for row in ds)
+
+    if cache_dir is not None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        local = cache_dir / filename
+        local.write_text(text, encoding="utf-8")
+        print(f"  Cached -> {local} ({len(text)/1e6:.1f} MB)")
+
+    return text
+
+
 def load_text(data_cfg: dict[str, Any], cache_dir: Path | None = None) -> str:
     """
-    读取语料：优先 ``TEAM_LLM_DATA_DIR/<filename>``；
-    其次同级 ``LLMs-from-scratch/ch02/...`` 中的同名文件；
-    否则将 ``url`` 下载到 cache_dir。
+    读取语料。支持两种 source：
+
+    - ``"url"``（默认）：优先本地 / 同级书本仓库，否则 URL 下载
+    - ``"huggingface"``：通过 HuggingFace ``datasets`` 库下载并缓存
     """
+    source = data_cfg.get("source", "url")
     filename = data_cfg["filename"]
+
     env_dir = os.environ.get("TEAM_LLM_DATA_DIR")
     if env_dir:
         p = Path(env_dir) / filename
         if p.is_file():
             return p.read_text(encoding="utf-8")
+
+    if source == "huggingface":
+        return _load_from_huggingface(data_cfg, cache_dir)
 
     sibling = _sibling_book_corpus(filename)
     if sibling is not None:

@@ -10,7 +10,11 @@ import json
 import math
 import random
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
+
+import gc
 
 import torch
 from torch import nn
@@ -26,6 +30,16 @@ def _set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def _fmt_duration(seconds: float) -> str:
+    """将秒数格式化为 HH:MM:SS 或 MM:SS。"""
+    s = int(seconds)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
 
 
 def _pick_device(preference: str) -> torch.device:
@@ -134,16 +148,26 @@ def main() -> int:
     out_root.mkdir(parents=True, exist_ok=True)
     cache_dir = out_root / "data_cache"
 
-    text = load_text(data_cfg, cache_dir=cache_dir)
-    if data_cfg.get("max_chars") is not None:
-        text = text[: int(data_cfg["max_chars"])]
+    token_cache_ready = (
+        (cache_dir / "train_tokens.pt").is_file()
+        and (cache_dir / "val_tokens.pt").is_file()
+    )
+    if token_cache_ready:
+        text = None
+    else:
+        text = load_text(data_cfg, cache_dir=cache_dir)
+        if data_cfg.get("max_chars") is not None:
+            text = text[: int(data_cfg["max_chars"])]
 
     train_loader, val_loader = train_val_dataloaders(
         text,
         float(data_cfg["train_ratio"]),
         model_cfg,
         train_cfg,
+        cache_dir=cache_dir,
     )
+    del text
+    gc.collect()
     if len(train_loader) == 0:
         print("Train DataLoader is empty.", file=sys.stderr)
         return 1
@@ -162,21 +186,29 @@ def main() -> int:
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameters: {n_params:,} ({n_params / 1e6:.1f}M)")
 
+    num_epochs = int(train_cfg["num_epochs"])
+    grad_clip = float(train_cfg.get("grad_clip", 1.0))
+    grad_accum_steps = int(train_cfg.get("gradient_accumulation_steps", 1))
+    patience = int(train_cfg.get("patience", 0))
+
+    if grad_accum_steps > 1:
+        print(
+            f"Gradient accumulation: {grad_accum_steps} micro-steps, "
+            f"effective batch_size={int(train_cfg['batch_size']) * grad_accum_steps}"
+        )
+
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=float(train_cfg["learning_rate"]),
         weight_decay=float(train_cfg["weight_decay"]),
     )
 
-    num_epochs = int(train_cfg["num_epochs"])
-    total_steps = num_epochs * len(train_loader)
+    steps_per_epoch = len(train_loader) // grad_accum_steps
+    total_steps = num_epochs * steps_per_epoch
 
     warmup_ratio = float(train_cfg.get("warmup_ratio", 0.1))
     min_lr_ratio = float(train_cfg.get("min_lr_ratio", 0.1))
     scheduler = _build_scheduler(optimizer, total_steps, warmup_ratio, min_lr_ratio)
-
-    grad_clip = float(train_cfg.get("grad_clip", 1.0))
-    patience = int(train_cfg.get("patience", 0))
 
     global_step = 0
     eval_freq = int(train_cfg["eval_freq"])
@@ -186,6 +218,7 @@ def main() -> int:
 
     best_val_loss = float("inf")
     patience_counter = 0
+    t_start = time.time()
 
     def text_to_ids(s: str) -> torch.Tensor:
         ids = encode_text(s)
@@ -226,26 +259,43 @@ def main() -> int:
 
     early_stopped = False
 
+    micro_step = 0
+
     for epoch in range(num_epochs):
         if early_stopped:
             break
         model.train()
         for input_batch, target_batch in train_loader:
-            optimizer.zero_grad(set_to_none=True)
             loss = calc_loss_batch(input_batch, target_batch, model, device)
+            loss = loss / grad_accum_steps
             loss.backward()
+            micro_step += 1
+
+            if micro_step % grad_accum_steps != 0:
+                continue
+
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip)
             optimizer.step()
             scheduler.step()
+            optimizer.zero_grad(set_to_none=True)
             global_step += 1
 
             if global_step % eval_freq == 0:
                 tr, va = evaluate_model(model, train_loader, val_loader, device, eval_iter)
                 lr_now = optimizer.param_groups[0]["lr"]
+                elapsed = time.time() - t_start
+                steps_per_sec = global_step / elapsed if elapsed > 0 else 0
+                remaining_steps = total_steps - global_step
+                eta_sec = remaining_steps / steps_per_sec if steps_per_sec > 0 else 0
+                elapsed_str = _fmt_duration(elapsed)
+                eta_str = _fmt_duration(eta_sec)
+                now_str = datetime.now().strftime("%H:%M:%S")
                 print(
+                    f"[{now_str}] "
                     f"Epoch {epoch + 1}  Step {global_step:06d}  "
                     f"train_loss={tr:.4f}  val_loss={va:.4f}  "
-                    f"lr={lr_now:.6f}"
+                    f"lr={lr_now:.6f}  "
+                    f"[{elapsed_str}<{eta_str}, {steps_per_sec:.1f} step/s]"
                 )
 
                 if va < best_val_loss:
@@ -270,7 +320,12 @@ def main() -> int:
         print_sample()
 
     _save_checkpoint(ckpt_path, num_epochs if not early_stopped else epoch)
-    print(f"Done. Final checkpoint -> {ckpt_path}")
+    total_time = time.time() - t_start
+    print(
+        f"Done. {global_step} steps in {_fmt_duration(total_time)} "
+        f"({global_step / total_time:.1f} step/s)"
+    )
+    print(f"Final checkpoint -> {ckpt_path}")
     if best_path.exists():
         print(f"Best checkpoint (val_loss={best_val_loss:.4f}) -> {best_path}")
     return 0

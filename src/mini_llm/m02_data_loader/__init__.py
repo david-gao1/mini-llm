@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import gc
 import os
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
@@ -14,7 +17,11 @@ from mini_llm.m01_tokenizer import encode_text
 
 
 class GPTDataset(Dataset):
-    """整段文本 tokenize 后按滑动窗口切分为 (input, target) 对。"""
+    """整段文本 tokenize 后按滑动窗口切分为 (input, target) 对。
+
+    使用单个连续 Tensor 存储所有 token，__getitem__ 通过索引切片返回
+    窗口视图，避免为每个样本分配独立 Tensor（大语料下快 10-100 倍）。
+    """
 
     def __init__(
         self,
@@ -22,21 +29,48 @@ class GPTDataset(Dataset):
         max_length: int,
         stride: int,
     ) -> None:
-        self.input_ids: list[torch.Tensor] = []
-        self.target_ids: list[torch.Tensor] = []
+        t0 = time.time()
+        n_chars = len(txt)
+        print(f"  Tokenizing {n_chars / 1e6:.1f}M chars ...", end="", flush=True)
         token_ids = encode_text(txt)
+        n_tokens = len(token_ids)
+        print(f" {n_tokens:,} tokens ({time.time() - t0:.1f}s)")
 
-        for i in range(0, len(token_ids) - max_length, stride):
-            chunk_in = token_ids[i : i + max_length]
-            chunk_tgt = token_ids[i + 1 : i + max_length + 1]
-            self.input_ids.append(torch.tensor(chunk_in, dtype=torch.long))
-            self.target_ids.append(torch.tensor(chunk_tgt, dtype=torch.long))
+        t1 = time.time()
+        print(f"  Building tensor ...", end="", flush=True)
+        np_arr = np.array(token_ids, dtype=np.int64)
+        del token_ids
+        gc.collect()
+        self._tokens = torch.from_numpy(np_arr)
+        print(f" done ({time.time() - t1:.1f}s)")
+
+        self._max_length = max_length
+        n_samples = max(0, (n_tokens - max_length) // stride)
+        self._offsets = torch.arange(0, n_samples * stride, stride, dtype=torch.long)
+        print(f"  Dataset ready: {n_samples:,} samples, "
+              f"total {time.time() - t0:.1f}s")
+
+    @classmethod
+    def from_tokens(
+        cls, tokens: torch.Tensor, max_length: int, stride: int
+    ) -> "GPTDataset":
+        """从已有 token tensor 构造，跳过 tokenization。"""
+        obj = object.__new__(cls)
+        obj._tokens = tokens
+        obj._max_length = max_length
+        n_tokens = len(tokens)
+        n_samples = max(0, (n_tokens - max_length) // stride)
+        obj._offsets = torch.arange(0, n_samples * stride, stride, dtype=torch.long)
+        print(f"  Dataset ready: {n_samples:,} samples (from cached tokens)")
+        return obj
 
     def __len__(self) -> int:
-        return len(self.input_ids)
+        return len(self._offsets)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.input_ids[idx], self.target_ids[idx]
+        start = self._offsets[idx].item()
+        end = start + self._max_length
+        return self._tokens[start:end], self._tokens[start + 1 : end + 1]
 
 
 def _sibling_book_corpus(filename: str) -> Path | None:
@@ -71,13 +105,18 @@ def _load_from_huggingface(data_cfg: dict[str, Any], cache_dir: Path | None) -> 
 
     print(f"  Downloading {hf_path}/{hf_name} split={hf_split} via HuggingFace ...")
     ds = load_dataset(hf_path, hf_name, split=hf_split)
+    print(f"  Joining {len(ds):,} rows ...", end="", flush=True)
+    t0 = time.time()
     text = "\n".join(row["text"] for row in ds)
+    print(f" {len(text) / 1e6:.1f}M chars ({time.time() - t0:.1f}s)")
 
     if cache_dir is not None:
         cache_dir.mkdir(parents=True, exist_ok=True)
         local = cache_dir / filename
+        print(f"  Writing cache -> {local} ...", end="", flush=True)
+        t1 = time.time()
         local.write_text(text, encoding="utf-8")
-        print(f"  Cached -> {local} ({len(text)/1e6:.1f} MB)")
+        print(f" done ({time.time() - t1:.1f}s)")
 
     return text
 
@@ -139,17 +178,49 @@ def create_dataloader(
 
 
 def train_val_dataloaders(
-    full_text: str,
+    full_text: str | None,
     train_ratio: float,
     model_cfg: dict[str, Any],
     train_cfg: dict[str, Any],
+    cache_dir: Path | None = None,
 ) -> tuple[DataLoader, DataLoader]:
-    split_idx = int(train_ratio * len(full_text))
-    train_text = full_text[:split_idx]
-    val_text = full_text[split_idx:]
     ctx = model_cfg["context_length"]
     bs = train_cfg["batch_size"]
 
+    train_pt = cache_dir / "train_tokens.pt" if cache_dir else None
+    val_pt = cache_dir / "val_tokens.pt" if cache_dir else None
+
+    if train_pt and train_pt.is_file() and val_pt and val_pt.is_file():
+        t0 = time.time()
+        print("[Token cache hit] Loading pre-tokenized tensors ...")
+        train_tokens = torch.load(train_pt, weights_only=True)
+        val_tokens = torch.load(val_pt, weights_only=True)
+        print(f"  Loaded {len(train_tokens):,} + {len(val_tokens):,} tokens "
+              f"in {time.time() - t0:.1f}s")
+
+        print("[Train split]")
+        train_ds = GPTDataset.from_tokens(train_tokens, ctx, ctx)
+        print("[Val split]")
+        val_ds = GPTDataset.from_tokens(val_tokens, ctx, ctx)
+
+        train_loader = DataLoader(
+            train_ds, batch_size=bs, shuffle=True, drop_last=True, num_workers=0,
+        )
+        val_loader = DataLoader(
+            val_ds, batch_size=bs, shuffle=False, drop_last=False, num_workers=0,
+        )
+        return train_loader, val_loader
+
+    assert full_text is not None, (
+        "full_text required on first run (no token cache found)"
+    )
+    split_idx = int(train_ratio * len(full_text))
+    train_text = full_text[:split_idx]
+    val_text = full_text[split_idx:]
+    del full_text
+    gc.collect()
+
+    print(f"[Train split] {len(train_text)/1e6:.1f}M chars")
     train_loader = create_dataloader(
         train_text,
         batch_size=bs,
@@ -158,6 +229,9 @@ def train_val_dataloaders(
         shuffle=True,
         drop_last=True,
     )
+    del train_text
+    gc.collect()
+    print(f"[Val split] {len(val_text)/1e6:.1f}M chars")
     val_loader = create_dataloader(
         val_text,
         batch_size=bs,
@@ -166,4 +240,15 @@ def train_val_dataloaders(
         shuffle=False,
         drop_last=False,
     )
+    del val_text
+    gc.collect()
+
+    if cache_dir is not None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        t0 = time.time()
+        print("[Saving token cache] ...", end="", flush=True)
+        torch.save(train_loader.dataset._tokens, train_pt)
+        torch.save(val_loader.dataset._tokens, val_pt)
+        print(f" done ({time.time() - t0:.1f}s)")
+
     return train_loader, val_loader

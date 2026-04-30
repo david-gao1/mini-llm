@@ -1,5 +1,6 @@
 runs/
 data/
+classify_out.txt
 *.log
 .venv/
 *.egg-info/

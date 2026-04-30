@@ -1,0 +1,27 @@
+---
+description: REQ 交付闭环（项目级补充）——本项目特定的路径与约定，配合全局规则 ~/.cursor/rules/req-delivery-checklist.mdc
+globs:
+alwaysApply: true
+---
+
+# REQ 交付闭环（项目补充）
+
+全局规则 `~/.cursor/rules/req-delivery-checklist.mdc` 定义了通用流程。
+本文件补充 **本项目特有的路径与约定**：
+
+## 项目特定路径
+
+| 文件 | 用途 |
+|------|------|
+| `docs/OWNER_CHECKLIST.md` | Owner 验收手册（命令 + 判断 + 问答） |
+| `SPEC.md` | API 契约与进度看板 |
+| `HARNESS.md` | 验收标准与闸门定义 |
+| `docs/DOMAIN-KNOWLEDGE.md` | 领域知识（ML 概念详解） |
+| `docs/REQ-*.md` | 各需求文档 |
+
+## 本项目的验收问答风格
+
+- 用户有 **10 年 Java 开发经验 + 在读 AI 研究生**
+- 类比优先用 **Java 生态**：Maven/Gradle、JUnit、Spring、异常处理、CI/CD
+- ML 概念用 **白话 + 阈值** 而非公式推导
+- 每个 REQ 的问答在 `docs/OWNER_CHECKLIST.md` 对应章节末尾

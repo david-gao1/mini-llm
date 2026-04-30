@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "description": "Fixed English SMS strings for manual or scripted regression against classify_sms / eval_classify. Field expected is human consensus (ham|spam); current checkpoints may still disagree on some rows.",
+  "probes": [
+    {
+      "id": "ham_short",
+      "text": "Thanks see you tomorrow",
+      "expected": "ham"
+    },
+    {
+      "id": "ham_question",
+      "text": "Are we still meeting at 3pm?",
+      "expected": "ham"
+    },
+    {
+      "id": "spam_template_winner",
+      "text": "WINNER!! You have been selected for a free prize call now",
+      "expected": "spam"
+    },
+    {
+      "id": "spam_free_vacation",
+      "text": "URGENT! You have won a FREE vacation. Text YES to claim.",
+      "expected": "spam"
+    }
+  ]
+}

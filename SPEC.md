@@ -19,6 +19,8 @@
 | `train.py` 优化 | P1-06 | done | done | — |
 | GPT-2 Medium + 大语料 | P1-07 | wip | todo | —（P1-06 已满足） |
 | `m05_generate` | P2-01 | done | done | — |
+| `m06_classify_finetune` | P2-02 | wip | done | — |
+| `classify_sms.py` | P2-03 | done | done | 依赖 P2-02 分类 checkpoint |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
 
@@ -424,3 +426,102 @@ generate(model, idx, max_new_tokens, context_size, *, temperature=1.0, top_k=Non
 ### 阻塞项
 
 依赖 P1-06 已完成（MPS / scheduler / early stopping）。无新增阻塞。
+
+---
+
+## P2-02 · `m06_classify_finetune`（SMS Spam 分类微调）
+
+**源码** `src/mini_llm/m06_classify_finetune/__init__.py`  
+**微调脚本** `finetune_classify.py`  
+**REQ 文档** [`docs/REQ-P2-02_ClassifyFinetune.md`](docs/REQ-P2-02_ClassifyFinetune.md)  
+**推理（CLI）** 见 **P2-03** · [`docs/REQ-P2-03_ClassifySmsInfer.md`](docs/REQ-P2-03_ClassifySmsInfer.md)
+
+### 公开 API（训练 / 评估）
+
+```python
+download_and_prepare_spam(data_dir: Path) -> tuple[Path, Path, Path]
+
+class SpamDataset(Dataset):
+    def __init__(self, csv_path, max_length=None, pad_token_id=50256)
+    def __getitem__(self, idx) -> tuple[Tensor, Tensor]  # (token_ids[T], label)
+
+calc_loss_batch(input_batch, target_batch, model, device) -> Tensor
+calc_loss_loader(loader, model, device, num_batches=None) -> float
+evaluate_model(model, train_loader, val_loader, device, eval_iter) -> tuple[float, float]
+calc_accuracy_loader(loader, model, device, num_batches=None) -> float
+```
+
+**张量契约**：每个 sample 为 `(token_ids[max_length], label)`；分类 logits 取 `model(batch)[:, -1, :]`。
+
+### 配置依赖
+
+| config.json 字段 | 用途 |
+|-------------------|------|
+| `pretrained_checkpoint` | 预训练 checkpoint 路径 |
+| `data.data_dir` | SMS 数据缓存目录 |
+| `finetune.num_classes` | 分类类别数 |
+| `finetune.num_epochs` | 微调轮数 |
+| `finetune.batch_size` | 批大小 |
+| `finetune.learning_rate` | AdamW lr |
+| `finetune.weight_decay` | 权重衰减 |
+| `finetune.eval_freq` | 每 N 步评估 loss |
+| `finetune.eval_iter` | 评估取 batch 数 |
+| `finetune.unfreeze_last_n_blocks` | 解冻末尾 Transformer block 数 |
+
+### 实现状态
+
+`wip` — 模块 + 微调脚本 + 训练侧测试已完成；端到端训练验收见 REQ-P2-02。
+
+### 测试覆盖（训练侧）
+
+| 测试文件 | 用例 | 状态 |
+|----------|------|------|
+| `tests/test_classify_finetune.py` | `test_spam_dataset_shapes` … `test_calc_loss_batch_finite`（共 6） | done |
+| `tests/test_classify_metrics.py` | 混淆 / PRF / `collect_predictions_loader` / FN 导出 / 探针 JSON | done |
+
+推理编码 / checkpoint 加载的 2 个用例归入 **P2-03**。
+
+### 阻塞项
+
+依赖预训练 checkpoint（如 `runs/gpt2_small_wikitext103/checkpoint_best.pt`）。
+
+**可选增强（非阻塞）**：详见 [REQ-P2-02 §10](docs/REQ-P2-02_ClassifyFinetune.md)（`BL-P2-02-02` 已完成；`BL-P2-02-03`～`BL-P2-02-05` 仍待有空实现）。
+
+---
+
+## P2-03 · `classify_sms.py`（SMS 分类推理）
+
+**脚本** [`classify_sms.py`](classify_sms.py)  
+**REQ 文档** [`docs/REQ-P2-03_ClassifySmsInfer.md`](docs/REQ-P2-03_ClassifySmsInfer.md)
+
+### 公开 API（模块内推理辅助）
+
+```python
+encode_spam_text_for_model(text: str, max_length: int, *, pad_token_id=50256) -> Tensor
+    # [1, max_length]
+
+load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple[nn.Module, dict]
+```
+
+### classify_sms.py（CLI）
+
+- **输入**：`--checkpoint`（默认 `runs/spam_classify/checkpoint_best.pt`）；`--text` 或 stdin；可选 `--device`、`--max-length`、`--probs`。
+- **输出**：stdout 单行 `ham` | `spam`。
+
+### 分类 checkpoint（读取）
+
+完整字段表见 REQ-P2-03 §4；须含分类 `out_head` 与（推荐）`spam_max_length`。
+
+### 实现状态
+
+`done` — 与 REQ-P2-03 一致。
+
+### 测试覆盖
+
+| 测试文件 | 用例 | 状态 |
+|----------|------|------|
+| `tests/test_classify_finetune.py` | `test_encode_spam_text_matches_dataset_row`、`test_load_spam_classifier_checkpoint_roundtrip` | done |
+
+### 阻塞项
+
+依赖 **P2-02** 产出的分类 checkpoint（非裸预训练 LM）。

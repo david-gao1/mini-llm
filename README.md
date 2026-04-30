@@ -120,12 +120,15 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 | 路径 | 说明 |
 |------|------|
 | [`configs/config.json`](configs/config.json) | 超参与数据相关配置 |
-| [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m05_generate/` |
+| [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m06_classify_finetune/` |
 | [`train.py`](train.py) | 训练入口（预训练循环、损失、评估） |
+| [`finetune_classify.py`](finetune_classify.py) | SMS Spam 分类微调（第六章对齐） |
+| [`classify_sms.py`](classify_sms.py) | 加载微调后的 `checkpoint_best.pt`，单行英文短信 → `ham` / `spam` |
 | [`generate_from_checkpoint.py`](generate_from_checkpoint.py) | 加载 `checkpoint_*.pt` 做文本生成（检验效果） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |
 | [`HARNESS.md`](HARNESS.md) | Harness 工程：分层、Part I/II REQ、需求模板 |
 | [`docs/README.md`](docs/README.md) | 模块级设计文档索引（如 m01 分词器详设） |
+| [`.cursor/skills/team-mini-llm-domain/SKILL.md`](.cursor/skills/team-mini-llm-domain/SKILL.md) | Cursor Agent Skill：模块边界、术语、生成踩坑（与 DOMAIN-KNOWLEDGE 对齐） |
 
 ## 对照跑通（可选）
 

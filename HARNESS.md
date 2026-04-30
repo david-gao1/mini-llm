@@ -47,4 +47,7 @@
 |--------|------|----------|---------|----------|
 | P2-01 | `m05_generate` | 自回归；temperature、top-k；消费 checkpoint | L2/L3：加载 `runs/.../checkpoint_latest.pt` 跑短生成 | 输出为 token 序列 / 可 decode 文本 |
 | — | **闸门 M2** | 训练 → 生成链路 | L3 | checkpoint 被加载且生成非空 |
-| P2-02 | （可选）微调 | 与课程 ch06/ch07 二选一对齐 | 由课程另给 Harness | 按课程判据 |
+| P2-02 | `m06_classify_finetune` + `finetune_classify.py` | SMS 微调；冻结 + 换 head；checkpoint **写入**含 `spam_max_length`；训练结束输出混淆矩阵 / spam PRF1 / **FN CSV** | L0：`pytest tests/test_classify_finetune.py`（前 6 个用例）+ `tests/test_classify_metrics.py`（见 SPEC §P2-02）；L3：`finetune_classify.py`；L2：`eval_classify.py --checkpoint runs/.../checkpoint_best.pt`（不重训即可复评） | test accuracy ≥ 90% |
+| P2-03 | `classify_sms.py` | 加载 **分类** checkpoint；encode/load；stdout `ham`\|`spam` | L0：同上文件（后 2 个用例，见 SPEC §P2-03）；L2：`classify_sms.py --checkpoint … --text "..."` | 编码与 Dataset 一致；CLI 可运行 |
+
+**Backlog（不阻塞上述 Harness）**：可选增强以 **`BL-P2-02-xx`** 记在 [`docs/REQ-P2-02_ClassifyFinetune.md`](docs/REQ-P2-02_ClassifyFinetune.md) §10（**BL-P2-02-02 已完成**，公式与行为见同文档 **§11**；其余如加权 CE、`--smoke`、官方 GPT-2 对照等仍为 todo）。

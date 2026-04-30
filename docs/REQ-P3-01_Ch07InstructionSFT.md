@@ -1,123 +1,141 @@
-# REQ-P3-01：第 7 章指令微调（SFT）——对齐书本数据与脚本，双轨底座（Small + GPT-2 Medium）
+# REQ-P3-01：第 7 章——教会模型「听指令、写回答」（指令微调 SFT）
 
 **所属**：[SPEC.md](../SPEC.md) → Part III · 指令微调（第 7 章）  
-**依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（`GPTModel`）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练产物）；**轨道 B** 另依赖 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)（Medium 预训练 checkpoint 可用）  
-**被依赖**：无（后续可增加「指令推理 CLI」独立 REQ）  
-**状态**：todo（本文档为范围与验收叙事；实现待开工）  
-**原书对照**：与 `team-mini-llm` **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/) · 主线脚本 `01_main-chapter-code/gpt_instruction_finetuning.py` · [`REFERENCE.md`](../REFERENCE.md)
+**依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（`GPTModel`）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）；**轨道 B** 还要等 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)（Medium 大模型训完可用）  
+**被依赖**：暂无（以后可加「输入一句指令、打印回答」的独立 REQ）  
+**状态**：todo（这篇先把范围和验收说清楚；代码还没写）  
+**原书代码在哪**：和本仓库 **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/)，最关键对照脚本 [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py)；章节索引见 [`REFERENCE.md`](../REFERENCE.md)。
 
 ---
 
-## 1. 业务逻辑（为什么做）
+## 1. 业务逻辑（读完就知道「要干嘛」）
 
-> **一句话**：书上第七章是让模型学会「按指令回答」——把 **指令（+ 可选输入）+ 回答** 拼成一段文本，用 **下一词预测** 训练；loss 里对 **填充位置**（以及书上那样对「指令段」）做 mask，让梯度主要花在 **学会生成回答** 上。  
-> **本轮只做 SFT**，不搞偏好学习；**DPO 等记 §9 backlog**，以后有空再接。
+### 先打个比方
 
-**和第 6 章的差别（人话）**：第六章是「整条短信打一个标签」；这里是「一段指令 → 模型要说一小段人话回答」，更像后续聊天产品的雏形，但 **仍然是监督微调**，不是 RL。
+想象你在培训一位只会「接龙写文章」的员工（这就是 **预训练语言模型**）：  
+第七章要做的不是考他「这条短信是不是垃圾」（那是 **第六章分类**），而是给他一张 **作业纸**，上面写着：**任务说明 +（可选）补充材料 + 标准答案**。  
+多抄几千遍类似的作业，他就会逐渐学会：**看到任务说明 → 按格式写出一段像样的回答**。
 
-**已定范围（与你的决策对齐）**：
+这就是 **指令微调（书里叫 instruction finetuning；行业里常叫 SFT，Supervised Fine-Tuning）**：  
+仍然是「猜下一个词」，但练习材料换成了「指令 + 回答」拼好的整段话。
 
-| # | 决策 | 含义 |
-|---|------|------|
-| 1 | **参考书里的数据与脚本** | 数据格式、拼接模板、`instruction-data.json` 来源与划分比例、以及 `custom_collate_fn`（pad、`ignore_index`）等 **优先逐段对齐** [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py)；再在 `mini_llm` 里用 **本仓库** `GPTModel` / `tiktoken` / 设备选择习惯重写，而不是复制粘贴依赖全书私有 `previous_chapters`。 |
-| 2 | **只做 SFT** | 训练目标仅为指令数据的 CE / LM loss；**不包含** DPO、RM、PPO 等。 |
-| 3 | **双轨底座** | **轨道 A**：**GPT-2 Small** + **很短指令集**（对齐书本 `test_mode` 思想：可先抽几十条 + pytest 固定种子，快速闭环）；**轨道 B**：以书上强调的 **GPT-2 Medium（约 355M 量级，与本仓库 `config_medium.json` / P1-07 一致）** 预训练 checkpoint 为起点，在同一套指令数据管线上跑 **更长** 的训练（资源与 `allowed_max_length` 等单独配置）。 |
+### 最关键的一句话
 
----
+> **每条训练样本** = 一小段固定格式的英文（任务说明 + 可选输入 + 参考答案连在一起）；**训练方式**还是「猜下一个词」；**填空对齐的地方**（补齐长短不一的句子时用的 pad）在算 loss 时要 **跳过**，别让模型去学「无意义的填充符号」。  
+> **本轮只做这一种监督学习（SFT）**；**不搞「偏好对战 / DPO」**——那种放到下面 **§9**，以后再议。
 
-## 2. 设计思路（怎么做）
+### 和第六章有什么不一样（别混）
 
-**参考形态（书本 · 已实现逻辑）**：
+| | 第六章（短信分类） | 第七章（本条 REQ） |
+|--|-------------------|-------------------|
+| **输入** | 一条短信 | 一段「指令 + 可选材料」 |
+| **输出** | 两个标签之一：`ham` / `spam` | **一小段文字回答**（很多个 token） |
+| **模型头上** | 换成 **2 类** 小脑袋 | **不换**成二分类，还是用 **整本词典那么大** 的输出头，一个一个词往外猜 |
 
-- **数据**：默认远程 JSON（书上 URL；可镜像到本仓库 `runs/…/data_cache/` 以免重复下载）。
-- **样本字段**：`instruction` / `input`（可空）/ `output`。
-- **拼文模板**：`format_input` → `### Instruction:` … 可选 `### Input:` …；回答前加 `\n\n### Response:\n{output}`（与书一致，便于对照调试）。
-- **批处理**：按 batch 内最长序列 pad；`targets` 里对 **padding** 标 `ignore_index`（默认 `-100`），使 `CrossEntropyLoss(ignore_index=…)` 不计入 pad；书上并对「连续 pad token」除第一个外继续 mask（对齐实现细节见原脚本）。
-- **训练**：在 **完整 LM 头**（词表大小）上做 next-token loss，**不**换成二分类头（与第 6 章不同）。
+### 你们已经拍板的三件事（白话版）
 
-**本仓库落地形态（建议，实施时可微调命名）**：
+| 约定 | 白话 |
+|------|------|
+| **跟书走** | 数据从哪下、JSON 长什么样、中英文模板怎么拼、训练集/验证集怎么切、一批数据长短不齐怎么垫齐——这些 **优先跟书上脚本一步一步对齐**，方便你对照「书上的数 vs 我们的数」。实现时用的是 **本仓库自己的** `GPTModel` 和 tokenizer，不直接把书里私有封装复制进来糊成一团。 |
+| **只做 SFT** | 只有「标准答案抄写作业」这一种训练；**不做** DPO、奖励模型、强化学习那一套。 |
+| **两条跑道** | **跑道 A**：用小模型（GPT-2 **Small**）+ **很少几条**指令数据，先把整条链路跑通（类似书里快速测试模式）。**跑道 B**：用大一点的 **GPT-2 Medium**（体量大约 **3 亿多参数**，和 [`REQ-P1-07`](REQ-P1-07_GPT2Medium.md) / `config_medium.json` 那条线一致），用 **完整（或接近完整）** 的指令数据认真训；**前提是大模型的预训练 checkpoint 已经有了**。 |
 
-- 新模块：例如 `mini_llm.m07_instruction_finetune`（Dataset、collate、`format_input`、可选下载封装）。
-- 新脚本：例如根目录 `finetune_instruction.py`（加载 **预训练** checkpoint → 训练循环 → 写出 **`checkpoint_best.pt` 或 `checkpoint_latest.pt`**，字段需与后续「指令生成」脚本约定）。
-- 新配置：例如 `configs/config_instruction_small.json`、`configs/config_instruction_medium.json`（`pretrained_checkpoint`、`data.url` / 本地路径、`finetune.*`、`allowed_max_length`、batch、epoch、lr）。
-
-**轨道 A vs B（同管线，换底座与规模）**：
-
-| 轨道 | 预训练起点 | 指令数据规模（首期） | 说明 |
-|------|------------|----------------------|------|
-| **A** | `runs/gpt2_small_wikitext103/checkpoint_best.pt`（或等价 Small） | **很短**（对齐书本 test 小集 / 自建迷你 JSON） | 先验证：**loss 有限、可保存、可与书本 loss 趋势量级对照**（不强求数值完全一致）。 |
-| **B** | P1-07 产出的 **Medium** checkpoint | 完整 `instruction-data.json` 或书上同等划分 | **依赖 Medium 已训稳**；注意显存与 `batch_size` / `allowed_max_length`。 |
+两条跑道用的是 **同一套代码和数据管线**，只是 **换起点权重**、**换数据多少**、**换训练多久**。
 
 ---
 
-## 3. 架构定位（在哪里）
+## 2. 设计思路（技术上怎么做——仍可跳着读）
+
+### 书上已经替你验证过的流程（我们照着对齐）
+
+1. **数据文件**：很多条 JSON，每条大致有——要做什么（`instruction`）、可选的补充（`input`，可以空）、参考答案（`output`）。默认用书里的 [`instruction-data.json`](https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch07/01_main-chapter-code/instruction-data.json)（也可下载后放到本地缓存，少爬网）。
+2. **拼成一整段字**：先写「下面是一条指令……」+ `### Instruction:` ……，若有输入再加 `### Input:` ……，最后加上 `### Response:` 和参考答案。模型练习的就是 **整段连起来的下一个词**。
+3. **一批里句子长短不一**：短的要在末尾 **垫（pad）** 到跟最长的一样长，才能叠成矩阵。**垫出来的位置**在「标准答案那一栏」里标记成一个 **不算分的记号**（书里常用 `-100`，叫 `ignore_index`），这样 loss 不会去强迫模型「预测填充符」。
+4. **训练**：和普通预训练一样用 **交叉熵** 做下一个词预测；**没有**第六章那种「只有两个类别」的分类头。
+
+### 我们仓库里预期会长什么样（名字可以微调）
+
+- **一个新模块**（例如 `mini_llm.m07_instruction_finetune`）：负责读 JSON、拼字符串、Dataset、以及「把一批样本垫齐并打上不算分记号」的函数。
+- **一个新脚本**（例如根目录 `finetune_instruction.py`）：加载 **已有的预训练** `.pt` → 跑训练循环 → 再存一个新的 `.pt`，供后面接 **生成脚本** 试用。
+- **两份配置**（例如 `configs/config_instruction_small.json` 和 `…_medium.json`）：里面写 **预训练权重路径**、数据路径或网址、学习率、batch、最长长度等——两条跑道各用一份。
+
+---
+
+## 3. 数据怎么流（一图流）
 
 ```text
-  instruction-data.json ──► InstructionDataset ──► DataLoader(custom collate)
-                                    │
-  pretrained LM checkpoint ─────────┴──► GPTModel（LM 头 V=vocab）
-                                    │
-                              finetune_instruction.py
-                                    │
-                         runs/…/checkpoint_*.pt（供后续生成脚本加载）
+instruction-data.json（很多条「指令+回答」）
+        │
+        ▼
+   拼成整段英文 → 转成 token 编号
+        │
+        ▼
+   按 batch 垫齐 ──► 标记「填充位置别算分」
+        │
+        ▼
+   接上已有的 GPTModel（词表那么大的输出头）
+        │
+        ▼
+   finetune_instruction.py 训练 → runs/…/checkpoint_*.pt
 ```
 
 ---
 
-## 4. 契约要点（草案）
+## 4. 契约要点（实现时要遵守的大方向）
 
-- **Dataset**：`__getitem__` 返回单条样本的 **token id 序列**（可与书本一致：整条含 Response）。
-- **collate**：输出 `(inputs [B,T], targets [B,T])`，`targets` 中 pad（及书上约定位置）为 `ignore_index`。
-- **checkpoint**：至少含 `model_state_dict`、`optimizer`（可选）、**训练用过的 `allowed_max_length`** 或与指令模板相关的 config，便于推理侧对齐。
+- **Dataset**：取出一条，就应能拿到 **这一条对应的整段 token 编号**（含 Response 部分）。
+- **组 batch**：交给模型的要有 **`inputs` 和 `targets`** 两个矩阵；**targets** 里凡是不想让它学的地方（主要是 pad），一律填 **不算分的那个数**。
+- **存盘**：checkpoint 里除了权重，最好带上 **这次训练用的最长长度**、模板版本之类信息，免得以后加载推理时对不齐。
 
-（细化到字段级 Table 可在实现阶段补全，对齐 `finetune_classify.py` 写法。）
-
----
-
-## 5. Harness / 验收（草案）
-
-| 层级 | 命令（拟定） | 通过判据 |
-|------|----------------|----------|
-| L0 | `pytest tests/test_instruction_finetune.py`（Dataset / collate / mask） | 形状与 mask 行为与书本逻辑一致；固定种子可复现 |
-| L2/L3 | `uv run python finetune_instruction.py --config configs/config_instruction_small.json` | loss 有限、无 NaN；写出 checkpoint |
-| 定性 | 加载微调后权重 + 现有生成入口（或后续 CLI） | 对 **固定 2～3 条**指令，输出更像「回答」而非纯维基续写（写入 REPORT 或截图备忘即可） |
-
-正式条目落地后同步 [`HARNESS.md`](../HARNESS.md)、[`SPEC.md`](../SPEC.md) §P3-01。
+（字段级明细表等代码写好后再补，写法可对齐 `finetune_classify.py`。）
 
 ---
 
-## 6. 依赖与阻塞
+## 5. 怎样算验收通过（草案）
 
-- **轨道 A**：Small 预训练权重路径存在即可。
-- **轨道 B**：**阻塞于 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)** 产出可用 Medium checkpoint；未就绪前先完成轨道 A。
+| 步骤 | 你要跑什么（暂定） | 怎样算过 |
+|------|-------------------|----------|
+| 单元测试 | `pytest tests/test_instruction_finetune.py` | 垫齐、mask、形状 **和书上逻辑一致**；固定随机种子可复现 |
+| 真训练（小配置） | `uv run python finetune_instruction.py --config configs/config_instruction_small.json` | loss 是正常数字、不出现 NaN；**磁盘上真有新 checkpoint** |
+| 肉眼看一下 | 用微调后的权重 + 现有生成方式，试 **2～3 条固定指令** | 听起来更像 **在回答问题**，而不是维基百科那种「接着往后编百科」（记在 REPORT 或笔记里即可） |
 
----
-
-## 7. 与原书章节的扩展对照（可选章节，**不纳入**本条 REQ 验收）
-
-| 原书目录（同级 `LLMs-from-scratch/ch07/`） | 内容 | 本条 REQ |
-|---------------------------------------------|------|----------|
-| `02_dataset-utilities/` | 近重复样本等数据清洗 | 可选后续 |
-| `04_preference-tuning-with-dpo/` | **DPO / 偏好** | **§9 backlog** |
-| `06_user_interface/` | 简易 UI | 可选后续 |
+具体命令以后写进 [`HARNESS.md`](../HARNESS.md)、[`SPEC.md`](../SPEC.md)。
 
 ---
 
-## 8. 文档与导航
+## 6. 谁先谁后（依赖）
 
-- 完成后更新：[`SPEC.md`](../SPEC.md)、[`HARNESS.md`](../HARNESS.md)、[`docs/README.md`](README.md)、[`REFERENCE.md`](../REFERENCE.md)、[`README.md`](../README.md) 第 3 周描述。
-- **学习问题**可追加 [`LEARNING_LOG.md`](LEARNING_LOG.md)（指令 vs 分类、mask 含义等）。
+- **跑道 A**：只要你有 **Small** 的预训练 checkpoint（例如 WikiText 那条）就能开始。
+- **跑道 B**：要等 **Medium** 预训练（P1-07）**跑出可用权重**；在那之前先把跑道 A 跑通最省事。
 
 ---
 
-## 9. Backlog（偏好学习 / DPO · **后续**）
+## 7. 书里同一章还有别的文件夹——本条先不做
 
-> **人话**：SFT 是「标准答案抄写作业」；**DPO** 一类方法是「给你两篇回答，告诉你哪篇更好」，模型学偏好。**本条 REQ 不做**，避免和 SFT 验收缠在一起。
+这些是 **选修**，不算本条 REQ 交付：
 
-| ID | 主题 | 说明 | 原书参考 |
-|----|------|------|----------|
-| **BL-P3-01-01** | 偏好数据 + DPO 训练环 | 对齐 `ch07/04_preference-tuning-with-dpo/`（或书中更新路径）；依赖本条 SFT checkpoint 与配对数据 | `LLMs-from-scratch/ch07/04_preference-tuning-with-dpo/` |
-| **BL-P3-01-02** | 评测脚本 | 可对齐书上 `ollama_evaluate.py` 思路或自建简易 BLEU/人工表 | `01_main-chapter-code/ollama_evaluate.py` |
+| 原书文件夹 | 大概是啥 |
+|------------|----------|
+| `02_dataset-utilities/` | 数据去重、清洗之类 |
+| `04_preference-tuning-with-dpo/` | **偏好学习 / DPO** → 放到 **§9** |
+| `06_user_interface/` | 小网页演示 |
+
+---
+
+## 8. 文档索引（做完代码后要回来改的）
+
+[`SPEC.md`](../SPEC.md)、[`HARNESS.md`](../HARNESS.md)、[`docs/README.md`](README.md)、[`REFERENCE.md`](../REFERENCE.md)、[`README.md`](../README.md)。自学问题可写在 [`LEARNING_LOG.md`](LEARNING_LOG.md)。
+
+---
+
+## 9. 以后再做的：偏好 / DPO（Backlog）
+
+> **再打个比方**：**SFT** = 老师给你标准答案，你照着背写法。**DPO** = 给你两篇作文，说「这篇比那篇好」，你学会更喜欢哪一种风格。**本条 REQ 不做后半种**，免得验收界限模糊。
+
+| 编号 | 内容 | 书上可参考 |
+|------|------|------------|
+| **BL-P3-01-01** | 偏好数据 + DPO 训练 | `ch07/04_preference-tuning-with-dpo/` |
+| **BL-P3-01-02** | 自动或半自动评测脚本 | `01_main-chapter-code/ollama_evaluate.py` 等 |
 
 ---
 
@@ -125,4 +143,5 @@
 
 | 日期 | 变更 |
 |------|------|
-| 2026-04-30 | 初稿：书面确认 **参考书数据/脚本**、**仅 SFT**、**Small 短集 + Medium 双轨**；DPO 记入 §9。 |
+| 2026-04-30 | 初稿：参考书数据/脚本、仅 SFT、Small/Medium 双轨；DPO → §9。 |
+| 2026-04-30 | 全文改写成更易读的表述（比方、表格白话、术语后置）。 |

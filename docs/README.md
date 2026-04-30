@@ -24,7 +24,7 @@
 | [REQ-P1-05_Train.md](REQ-P1-05_Train.md) | P1-05 预训练循环 | ✅ 已完成 |
 | [REQ-P1-06_TrainOptimize.md](REQ-P1-06_TrainOptimize.md) | P1-06 训练优化（过拟合治理 + 设备加速） | ✅ 已完成 |
 | [REQ-P1-07_GPT2Medium.md](REQ-P1-07_GPT2Medium.md) | P1-07 GPT-2 Medium + WikiText-2 | todo |
-| [REQ-P2-02_ClassifyFinetune.md](REQ-P2-02_ClassifyFinetune.md) | P2-02 finetune_classify：预训练 GPT → SMS ham/spam checkpoint（供 P2-03） | 进行中；§10 为可选增强 backlog |
+| [REQ-P2-02_ClassifyFinetune.md](REQ-P2-02_ClassifyFinetune.md) | P2-02 finetune_classify：预训练 GPT → SMS ham/spam checkpoint（供 P2-03） | ✅ 已完成；§10 为可选增强 backlog |
 | [REQ-P2-03_ClassifySmsInfer.md](REQ-P2-03_ClassifySmsInfer.md) | P2-03 classify_sms：一行英文短信 → stdout `ham`/`spam`（P2-02 checkpoint） | ✅ 已完成 |
 
 | 文档 | 说明 |

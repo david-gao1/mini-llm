@@ -19,8 +19,8 @@
 | `train.py` 优化 | P1-06 | done | done | — |
 | GPT-2 Medium + 大语料 | P1-07 | wip | todo | —（P1-06 已满足） |
 | `m05_generate` | P2-01 | done | done | — |
-| `m06_classify_finetune` | P2-02 | wip | done | — |
-| `classify_sms.py` | P2-03 | done | done | 依赖 P2-02 分类 checkpoint |
+| `m06_classify_finetune` | P2-02 | done | done | — |
+| `classify_sms.py` | P2-03 | done | done | — |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
 
@@ -470,7 +470,7 @@ calc_accuracy_loader(loader, model, device, num_batches=None) -> float
 
 ### 实现状态
 
-`wip` — 模块 + 微调脚本 + 训练侧测试已完成；端到端训练验收见 REQ-P2-02。
+`done` — SMS 微调、`eval_classify`、训练末段 test 混淆矩阵 / spam PRF1 / FN CSV 与 HARNESS 判据已满足；可选 backlog 见 REQ-P2-02 **§10**。
 
 ### 测试覆盖（训练侧）
 

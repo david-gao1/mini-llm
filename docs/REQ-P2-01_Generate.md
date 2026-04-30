@@ -152,3 +152,16 @@ _sample_next(logits: Tensor, temperature: float, top_k: int | None) -> Tensor
 | 测试 | `tests/test_model_forward.py`（`test_generate_step`） |
 | 依赖模块 | `mini_llm.m04_model`（GPTModel 前向） |
 | 依赖库 | `torch >= 2.0.0` |
+
+---
+
+## 8. 从 checkpoint 脚本检验时的常见误判（`generate_from_checkpoint.py`）
+
+与 **`m05_generate.generate` 的规则（R3–R5）**一致：`temperature ≤ 0` 时为 **贪心（argmax）**。在实际使用中还会出现两类「看起来像坏了」的现象：
+
+| 现象 | 说明 |
+|------|------|
+| **`--temperature 0` 后出现 `Mary , Mary , …` 式重复** | 贪心每步取当前最可能 token，易锁进 **局部重复循环**；小型、维基域模型上很常见。**不等于权重损坏**。人工看维基风格续写时优先用默认 **temperature≈0.8 + top-k**；仅调试「完全可复现」时用 `0`。 |
+| **`zsh: command not found: --prompt`** | 终端多行命令某一行行尾 **少了 `\`**，导致 `--prompt` 未被传给 Python，被 shell 当成独立命令。除最后一行外，每行行尾保留 `\`。 |
+
+与 **英文/中文 prompt** 相关的误判见 [`DOMAIN-KNOWLEDGE.md`](DOMAIN-KNOWLEDGE.md) **第 6.4 节**；参数表与示例见 [`RUN_REPORT_gpt2_small_wikitext103.md`](RUN_REPORT_gpt2_small_wikitext103.md) **第七节**。脚本在 `temperature≤0` 时也会向 stderr 打印简短提示。

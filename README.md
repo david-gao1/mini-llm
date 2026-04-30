@@ -37,6 +37,10 @@ uv run pytest
 
 > **注意：** 本仓库 WikiText 实验为 **英文**语料；检验时请用 **英文** `--prompt`。中文开头容易误判为「模型很差」，说明见 [`docs/DOMAIN-KNOWLEDGE.md`](docs/DOMAIN-KNOWLEDGE.md) 第 6.4 节、[`docs/RUN_REPORT_gpt2_small_wikitext103.md`](docs/RUN_REPORT_gpt2_small_wikitext103.md) 第七节。
 
+> **`--temperature 0`（贪心）与小模型：** 每步取概率最大的 token，输出可复现，但很容易出现 **同一词语反复出现**（如连续 `Mary`），观感常比默认 `0.8` + top-k **更差**——这是贪心解码的常见现象，不是 checkpoint 损坏。日常肉眼看续写建议保持默认；详见同一运行报告第七节参数表。
+>
+> **多行命令：** 除最后一行外，每行行尾必须有 `\`；否则下一行的 `--prompt` 不会传给 Python，会出现 `command not found: --prompt`。
+
 ```bash
 cd /path/to/team-mini-llm
 uv run python generate_from_checkpoint.py \

@@ -26,6 +26,14 @@
 | [REQ-P1-07_GPT2Medium.md](REQ-P1-07_GPT2Medium.md) | P1-07 GPT-2 Medium + WikiText-2 | todo |
 | [REQ-P2-01_Generate.md](REQ-P2-01_Generate.md) | P2-01 自回归文本生成 | ✅ 已完成 |
 
+## 领域知识与运行记录
+
+| 文档 | 说明 |
+|------|------|
+| [DOMAIN-KNOWLEDGE.md](DOMAIN-KNOWLEDGE.md) | DDD 视角项目知识、踩坑汇总（含 checkpoint 生成：**中英文 prompt**、`temperature=0` 贪心易重复、**shell 续行 `\`**） |
+| [RUN_REPORT_gpt2_small_wikitext103.md](RUN_REPORT_gpt2_small_wikitext103.md) | GPT-2 Small × WikiText-103 运行报告；**第七节**为加载 checkpoint 与生成参数说明 |
+| [TRAINING_LOG.md](TRAINING_LOG.md) | 训练配置切换与时间线记录 |
+
 ## 模块设计文档
 
 | 文档 | 说明 |

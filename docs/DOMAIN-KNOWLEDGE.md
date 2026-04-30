@@ -301,6 +301,8 @@ tail -f /abs/path/to/team-mini-llm/train_wt103.log
 | 用「你好」「你是谁」开头，后面变成英文或乱码 | **WikiText-103 为英文维基**；模型从未学习中文接续分布 | **不是 checkpoint 坏了**；应用 **英文** prompt 检验本次实验 |
 | 中文后出现问号方块（U+FFFD） | **GPT-2 BPE** 对中文切分与训练时见过的序列差异大 | 同上：改用英文开头 |
 | 正文出现 `8 @.@ 4`、`@-@` | WikiText **raw** 语料里小数点、连字符的写法 | 模型模仿语料风格，**非程序错误** |
+| `--temperature 0` 时出现 `Mary , Mary , …` 式重复 | **贪心解码**（每步取概率最大 token），易锁进局部重复循环 | **不是 checkpoint 坏了**；检验观感优先用默认 **temperature≈0.8 + top-k**；仅在和调试场景需要完全可复现时用 `0` |
+| 多行粘贴命令报错 `command not found: --prompt` | shell 续行少了行尾 `\`，`--prompt` 未被传给 Python | 除最后一行外，每行行尾保留 `\` |
 
 **推荐检验命令（英文开头）：**
 
@@ -312,7 +314,7 @@ uv run python generate_from_checkpoint.py \
 
 脚本在未加载模型前若检测到中日韩等字符，会向 stderr 打印提示（与上表一致）。
 
-**展开说明与示例：** [`docs/RUN_REPORT_gpt2_small_wikitext103.md`](RUN_REPORT_gpt2_small_wikitext103.md) **第七节**（含参数表与 `@.@` 说明）。
+**展开说明与示例：** [`docs/RUN_REPORT_gpt2_small_wikitext103.md`](RUN_REPORT_gpt2_small_wikitext103.md) **第七节**（含参数表与 `@.@` 说明）。生成模块 REQ 中的对照说明见 [`REQ-P2-01_Generate.md`](REQ-P2-01_Generate.md) **第 8 节**。
 
 ### 6.5 预训练 vs 对话能力 vs 「世界知识」
 

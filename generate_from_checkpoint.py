@@ -9,10 +9,12 @@ Checkpoint 由 train.py 写入，内含完整 config；本脚本据此重建 GPT
       --checkpoint runs/gpt2_small_wikitext103/checkpoint_best.pt \\
       --prompt "The history of"
 
-    # 贪心（temperature=0），结果固定
+    # temperature=0：贪心、输出可复现，但小模型易出现「Mary, Mary…」式重复；多数情况默认 0.8 更顺眼
     uv run python generate_from_checkpoint.py \\
       --checkpoint runs/gpt2_small_wikitext103/checkpoint_best.pt \\
       --prompt "Hello" --temperature 0
+
+多行粘贴时注意：**每一行末尾都要有 \\**（最后一行除外），否则下一行的 '--prompt' 不会被传给 Python，shell 会报 command not found: --prompt。
 """
 from __future__ import annotations
 
@@ -84,6 +86,15 @@ def main() -> int:
             "提示：本 checkpoint 在英文 WikiText-103 上训练；中文/日文/韩文开头不在训练分布内，"
             "续写会像「乱接英文」且易出现解码异常字符。请改用英文 prompt 检验效果，例如 "
             '"The history of" 或 "In the early 20th century,"。',
+            file=sys.stderr,
+        )
+
+    if args.temperature <= 0:
+        print(
+            "提示：temperature=0 为贪心解码（每步取概率最大的 token），输出可复现。"
+            "小型语言模型上很常见的问题是陷入重复循环（如连续重复同一名字或短语），"
+            "反而不如默认的 temperature + top-k 采样「顺眼」。"
+            "若只是人工看维基风格续写，建议用默认 --temperature 0.8；需要可复现实验时再改用 0。",
             file=sys.stderr,
         )
 

@@ -192,7 +192,7 @@
 
 ## 七、如何运行模型检验效果
 
-本节约定：**如何加载 checkpoint、如何用英文公平检验**；**不要用中文开头误判英文维基模型的质量**。全域同类说明见 [`DOMAIN-KNOWLEDGE.md`](DOMAIN-KNOWLEDGE.md) **第 6.4 节**。
+本节约定：**如何加载 checkpoint、如何用英文公平检验**；**不要用中文开头误判英文维基模型的质量**。全域同类说明见 [`DOMAIN-KNOWLEDGE.md`](DOMAIN-KNOWLEDGE.md) **第 6.4 节**；与 `generate` 规则对照见 [`REQ-P2-01_Generate.md`](REQ-P2-01_Generate.md) **第 8 节**（`temperature=0` 贪心易重复、shell 续行）。
 
 在 **`team-mini-llm`** 项目根目录执行（环境与训练相同：`uv sync` 后有 `.venv`）。
 
@@ -214,9 +214,11 @@ uv run python generate_from_checkpoint.py \
 |------|------|------|
 | `--prompt` | `The history of` | 开头文本，建议英文（与 GPT-2 BPE 一致） |
 | `--max-new-tokens` | `80` | 在 prompt 后面续写多少个 token |
-| `--temperature` | `0.8` | 越大越随机；设为 `0` 时为贪心解码，同样 prompt 输出固定 |
+| `--temperature` | `0.8` | 默认略带随机。**`0` = 贪心（每步取概率最大的 token）**，同样 prompt 输出固定，但小模型上极易 **重复同一短语**（如连续 `Mary`），观感常比默认采样差——属贪心解码常见现象，不是权重损坏。只有需要「完全可复现」时再改用 `0`。 |
 | `--top-k` | `25` | 只在概率最高的 k 个 token 里采样；设为 `0` 关闭 top-k |
 | `--device` | `auto` | `cuda` / `mps` / `cpu`，与训练时一致即可 |
+
+**终端续行：** 多行命令里每一行行尾都要有 `\`（最后一行除外）。若少写一个 `\`，下一行的 `--prompt` 不会进 Python，zsh 会报 `command not found: --prompt`。
 
 **3）若坚持用虚拟环境里的 Python 绝对路径（与 nohup 训练同款写法）**
 

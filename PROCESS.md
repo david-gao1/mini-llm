@@ -72,7 +72,7 @@
 |----------|------|----------------|
 | `README.md` | 项目总览 | 描述"做什么"；本流程描述"怎么做" |
 | `HARNESS.md` | 需求与验收 | 产品流程的输出物，测试流程的输入物 |
-| `SPEC.md` | 规格与进度 | 记录"做到哪了、API 细节、卡在哪"，与 HARNESS 互补 |
+| `SPEC.md` | 规格与进度 | API / 状态 / 测试覆盖；文首 **SPEC 书写约定**；与 HARNESS、REQ 分工见 [`docs/process/product-design.md`](docs/process/product-design.md) §5 |
 | `REFERENCE.md` | 原书对照 | 开发时的参考资料 |
 | `docs/*.md` | 模块设计文档 | 开发流程中的设计产出 |
 
@@ -85,3 +85,4 @@
 3. **产出物落地**：讨论结果必须落到文档或代码中，不停留在对话里
 4. **不跳步**：AI 不会在产品阶段直接写代码，也不会在开发阶段跳过测试
 5. **REQ 文档可读性**：新建或改写 `docs/REQ-*.md` 时，`§1 业务逻辑` 优先通俗说明「要做什么」，技术细节后置；约定见 [`docs/process/product-design.md`](docs/process/product-design.md) **§5**
+6. **SPEC 文档**：更新接口或实现状态时遵守 [`SPEC.md`](SPEC.md) 文首 **SPEC 书写约定**（总览表与分节模板）；不把 REQ 里的长篇业务叙述搬进 SPEC。

@@ -1,5 +1,6 @@
 runs/
 data/
+*.log
 .venv/
 *.egg-info/
 __pycache__/

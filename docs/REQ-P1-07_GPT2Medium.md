@@ -38,7 +38,7 @@ P1-01 到 P1-06 使用的是 29M 参数模型 + 20KB 短篇小说（the-verdict.
 **阶段二 WikiText-103（当前）**：
 - `load_text` 新增 `source="huggingface"` 模式，通过 HuggingFace `datasets` 库下载
 - 使用 **raw 版本**（`wikitext-103-raw-v1`）：原始文本，无 `<unk>` 预处理产物
-- batch_size=4（36GB 内存富余），num_epochs=3（大语料不需要多轮）
+- batch_size=1 + gradient_accumulation_steps=4（等效 batch=4，避免 OOM），num_epochs=3（大语料不需要多轮）
 
 **为什么从 WikiText-2 升级到 WikiText-103**：
 - WikiText-2 训练结果（Run 2）显示 Epoch 5 后 train/val gap 达 2.0，**数据量是核心瓶颈**
@@ -51,11 +51,14 @@ P1-01 到 P1-06 使用的是 29M 参数模型 + 20KB 短篇小说（the-verdict.
 - 下载后转存为本地 txt，后续训练离线复用
 
 **关键设计决策**：
-- `batch_size=4`（M3 Max 36GB，4 × 1024 context 内存约 14-17 GB）
+- `batch_size=1` + `gradient_accumulation_steps=4`（等效 batch=4，但峰值内存降至 ~8-10 GB）
 - `num_epochs=3`（500MB 语料 × 3 轮，大模型预训练通常 1-2 轮即可）
-- `eval_freq=500`（步数多，降低评估频率）
+- `eval_freq=2000`（步数多，降低评估频率）
 - `patience=20`（WikiText-2 实验验证的合理值）
 - `drop_rate=0.1`（大语料过拟合风险低）
+
+> **内存优化说明**：原 `batch_size=4` 配置在 M3 Max 36GB 上实测内存溢出（终端进程占用 55GB+，系统 swap 严重）。
+> 改用 `batch_size=1` + 梯度累积 4 步，数学上等价（相同的梯度均值），但峰值激活值内存降低 4 倍。
 
 ---
 
@@ -95,6 +98,13 @@ P1-01 到 P1-06 使用的是 29M 参数模型 + 20KB 短篇小说（the-verdict.
 ```bash
 uv run python train.py --config configs/config_medium.json
 ```
+
+> 终端后台运行建议（避免日志缓冲与工作目录漂移）：
+>
+> ```bash
+> nohup env PYTHONUNBUFFERED=1 "/abs/path/to/team-mini-llm/.venv/bin/python" -u "/abs/path/to/team-mini-llm/train.py" --config "/abs/path/to/team-mini-llm/configs/config_medium.json" > "/abs/path/to/team-mini-llm/train_wt103.log" 2>&1 &
+> tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
+> ```
 
 ### 数据源
 
@@ -150,10 +160,11 @@ uv run python train.py --config configs/config_medium.json
 | `learning_rate` | 3e-4 | 不变 | AdamW 初始学习率；配合 cosine scheduler 衰减 |
 | `weight_decay` | 0.1 | 不变 | 权重衰减正则化 |
 | `num_epochs` | **3** | 10→3 | 500MB 语料不需要多轮，1-2 轮已充分 |
-| `batch_size` | **4** | 1→4 | 36GB 内存富余，4× 吞吐提速，每步处理 4096 token |
-| `eval_freq` | **500** | 100→500 | 步数多（~32K/epoch），降低评估频率 |
+| `batch_size` | **1** | 1→1 | 单样本前向，配合梯度累积降低峰值内存 |
+| `gradient_accumulation_steps` | **4** | 无→4 | 每 4 个 micro-step 做一次 optimizer.step，等效 batch=4 |
+| `eval_freq` | **2000** | 100→2000 | 优化器步数（~31.7K/epoch），降低评估频率 |
 | `eval_iter` | 10 | 不变 | 评估时取 10 个 batch 的平均 |
-| `checkpoint_every_steps` | **2000** | 500→2000 | 步数多，降低 IO 频率 |
+| `checkpoint_every_steps` | **8000** | 500→8000 | 步数多，降低 IO 频率 |
 | `grad_clip` | 1.0 | 不变 | 梯度裁剪阈值 |
 | `warmup_ratio` | 0.1 | 不变 | 前 10% 步数线性升温 |
 | `min_lr_ratio` | 0.1 | 不变 | cosine 衰减下限 = 3e-5 |
@@ -167,17 +178,21 @@ uv run python train.py --config configs/config_medium.json
 | 模型参数（float32） | 1.6 GB | 406M × 4 bytes |
 | 梯度 | 1.6 GB | 与参数等大 |
 | AdamW 状态（动量 + 方差） | 3.2 GB | 参数量 × 2 × 4 bytes |
-| 激活值（batch=4, context=1024） | ~8 GB | batch_size ×4 → 激活等比增大 |
+| 激活值（batch=1, context=1024） | ~2 GB | batch_size=1，梯度累积不增加峰值激活 |
 | 数据集张量 | ~0.8 GB | 130M tokens × 8 bytes |
-| **总计** | **~15-17 GB** | 36GB 内存仍有余量 |
+| **总计** | **~9-10 GB** | 36GB 内存充裕 |
+
+> **历史教训**：原 `batch_size=4` 配置实测峰值 55GB+（系统 swap），远超估算的 15-17 GB。
+> 原因：float32 下 24 层 Transformer 的中间激活值（注意力矩阵 `1024×1024×16heads`、FFN 中间层等）随 batch 线性增长，
+> 且 MPS 后端的内存分配开销大于 CUDA。改为 `batch_size=1` + 梯度累积后问题解决。
 
 ### 训练规模估算
 
 | 项 | WikiText-2（已完成） | WikiText-103（当前） |
 |----|------|------|
 | 训练集 token 数 | ~2.4M | **~130M** |
-| 每 epoch 步数 | ~2,200（batch=1） | **~31,700（batch=4）** |
-| 总步数（全 epoch） | ~22,000（10 ep） | **~95,000（3 ep）** |
+| 每 epoch 步数 | ~2,200（batch=1） | **~31,700（batch=1, accum=4，优化器步数）** |
+| 总步数（全 epoch） | ~22,000（10 ep） | **~95,000（3 ep，优化器步数）** |
 | 预计总训练时间 | ~2 小时 | **~20-30 小时**（可能 early stop） |
 
 ### 输出
@@ -197,7 +212,7 @@ uv run python train.py --config configs/config_medium.json
 | R3 | HuggingFace 下载 + 缓存 | 首次运行通过 `datasets` 库下载，转存本地 txt，后续离线复用 | ~500MB |
 | R4 | Raw 版本 | 使用 `wikitext-103-raw-v1`（原始文本），不含 `<unk>` 预处理产物 | 消除 unk 污染 |
 | R5 | 字符比例 split | 0.95 train / 0.05 val，与现有逻辑一致 | ~475MB / ~25MB |
-| R6 | batch_size=4 | 36GB 内存富余（预估 15-17GB），4× 吞吐提速 | 可调到 8 |
+| R6 | batch_size=1 + grad_accum=4 | 等效 batch=4，峰值内存 ~9-10GB（实测 batch=4 直接 OOM） | 等效 batch 可调 |
 | R7 | MPS 加速 | M3 Max 自动选择 MPS（P1-06 已支持） | device="auto" |
 | R8 | Early stopping | patience=20，WikiText-2 实验验证的合理值 | 连续 20 次不降则停 |
 | R9 | 原有 config 不动 | `configs/config.json` 保持小模型配置 | 可随时回退 |

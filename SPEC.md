@@ -17,7 +17,7 @@
 | `m04_model` | P1-04 | done | done | — |
 | `train.py` | P1-05 | done | done | — |
 | `train.py` 优化 | P1-06 | done | done | — |
-| GPT-2 Medium + 大语料 | P1-07 | todo | todo | 依赖 P1-06 |
+| GPT-2 Medium + 大语料 | P1-07 | wip | todo | —（P1-06 已满足） |
 | `m05_generate` | P2-01 | done | done | — |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
@@ -87,7 +87,7 @@ class GPTDataset(Dataset):
 
 load_text(data_cfg: dict, cache_dir: Path | None = None) -> str
 create_dataloader(text, batch_size, max_length, stride, shuffle, drop_last, num_workers=0) -> DataLoader
-train_val_dataloaders(full_text, train_ratio, model_cfg, train_cfg) -> tuple[DataLoader, DataLoader]
+train_val_dataloaders(full_text, train_ratio, model_cfg, train_cfg, cache_dir=None) -> tuple[DataLoader, DataLoader]
 ```
 
 **张量契约**：每个 sample 为 `(input[T], target[T])`，其中 `T = context_length`；
@@ -106,7 +106,7 @@ batch 后为 `[B, T]`。
 
 ### 实现状态
 
-`done` — 滑动窗口切分、三路语料加载（环境变量 → 同级仓库 → URL 下载）、train/val split。
+`done` — 滑动窗口切分、语料加载（环境变量 → 同级仓库 → URL / HuggingFace）、train/val split、可选 `cache_dir` 下的 token `.pt` 缓存。
 
 ### 测试覆盖
 
@@ -399,28 +399,28 @@ generate(model, idx, max_new_tokens, context_size, *, temperature=1.0, top_k=Non
 
 ---
 
-## P1-07 · GPT-2 Medium + WikiText-2
+## P1-07 · GPT-2 Medium + WikiText-103（raw）
 
-**配置** `configs/config_medium.json`
+**配置** `configs/config_medium.json`（`Salesforce/wikitext` / `wikitext-103-raw-v1`，HuggingFace 下载后缓存为本地 txt）  
 **REQ 文档** [`docs/REQ-P1-07_GPT2Medium.md`](docs/REQ-P1-07_GPT2Medium.md)
 
 ### 升级内容
 
 | 项 | 原配置（config.json） | 新配置（config_medium.json） |
 |----|:---:|:---:|
-| 语料 | the-verdict.txt (~20KB) | WikiText-2 train (~10MB) |
+| 语料 | the-verdict.txt (~20KB) | WikiText-103 raw train（~500MB，HF 缓存至 `data_cache/`） |
 | emb_dim | 384 | 1024 |
 | n_heads | 6 | 16 |
 | n_layers | 6 | 24 |
 | context_length | 256 | 1024 |
-| 参数量 | ~29M | ~355M |
-| batch_size | 8 | 1 |
-| 内存估算 | ~0.7 GB | ~12-14 GB |
+| 参数量 | ~29M | ~406M（tok_emb 与 out_head 独立，无 weight tying） |
+| batch_size | 8 | 1（另 `gradient_accumulation_steps=4`，等效 batch=4） |
+| 内存估算 | ~0.7 GB | ~9–10 GB（batch=1；大 batch 易 OOM） |
 
 ### 实现状态
 
-`todo` — 配置文件已就绪，待运行验证。
+`wip` — Medium 配置 + 大语料数据管道与训练已在跑；完整验收见 REQ-P1-07。
 
 ### 阻塞项
 
-依赖 P1-06 已完成（MPS / scheduler / early stopping）。
+依赖 P1-06 已完成（MPS / scheduler / early stopping）。无新增阻塞。

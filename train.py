@@ -214,6 +214,7 @@ def main() -> int:
     eval_freq = int(train_cfg["eval_freq"])
     eval_iter = int(train_cfg["eval_iter"])
     ckpt_every = int(train_cfg["checkpoint_every_steps"])
+    heartbeat_every = int(train_cfg.get("heartbeat_every_steps", 100))
     start_context = str(train_cfg.get("start_context", "Every effort moves you"))
 
     best_val_loss = float("inf")
@@ -261,6 +262,28 @@ def main() -> int:
 
     micro_step = 0
 
+    first_eval_at = eval_freq
+    micro_to_first_eval = first_eval_at * grad_accum_steps
+    print(
+        f"Training start: {total_steps:,} optimizer steps planned, "
+        f"eval+loss log every {eval_freq} steps "
+        f"(first full eval at step {first_eval_at}, "
+        f"after ~{micro_to_first_eval:,} micro-batches).",
+        flush=True,
+    )
+    if heartbeat_every > 0:
+        print(
+            f"Heartbeat every {heartbeat_every} optimizer steps "
+            f"(set train.heartbeat_every_steps=0 to disable).",
+            flush=True,
+        )
+    else:
+        print(
+            "Heartbeat disabled — log only appears at eval/checkpoint; "
+            "this can look like a hang for hours.",
+            flush=True,
+        )
+
     for epoch in range(num_epochs):
         if early_stopped:
             break
@@ -279,6 +302,17 @@ def main() -> int:
             scheduler.step()
             optimizer.zero_grad(set_to_none=True)
             global_step += 1
+
+            if heartbeat_every > 0 and (
+                global_step == 1 or global_step % heartbeat_every == 0
+            ):
+                elapsed = time.time() - t_start
+                now_str = datetime.now().strftime("%H:%M:%S")
+                print(
+                    f"[{now_str}] heartbeat  step {global_step:,}/{total_steps:,}  "
+                    f"elapsed {_fmt_duration(elapsed)}",
+                    flush=True,
+                )
 
             if global_step % eval_freq == 0:
                 tr, va = evaluate_model(model, train_loader, val_loader, device, eval_iter)

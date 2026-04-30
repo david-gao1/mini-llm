@@ -33,6 +33,26 @@ uv run python train.py --config configs/config.json
 uv run pytest
 ```
 
+加载训练保存的 checkpoint 做文本生成（检验效果）：
+
+> **注意：** 本仓库 WikiText 实验为 **英文**语料；检验时请用 **英文** `--prompt`。中文开头容易误判为「模型很差」，说明见 [`docs/DOMAIN-KNOWLEDGE.md`](docs/DOMAIN-KNOWLEDGE.md) 第 6.4 节、[`docs/RUN_REPORT_gpt2_small_wikitext103.md`](docs/RUN_REPORT_gpt2_small_wikitext103.md) 第七节。
+
+```bash
+cd /path/to/team-mini-llm
+uv run python generate_from_checkpoint.py \
+  --checkpoint runs/gpt2_small_wikitext103/checkpoint_best.pt \
+  --prompt "The history of"
+```
+
+详见 [`generate_from_checkpoint.py`](generate_from_checkpoint.py) 文件头注释；运行报告里亦写有示例 [`docs/RUN_REPORT_gpt2_small_wikitext103.md`](docs/RUN_REPORT_gpt2_small_wikitext103.md)。
+
+长任务（如 WikiText-103）建议使用项目虚拟环境绝对路径 + 无缓冲日志，避免 `uv` 在不同终端上下文里切到上级目录导致找不到 `train.py`，以及日志长时间不刷新：
+
+```bash
+nohup env PYTHONUNBUFFERED=1 "/abs/path/to/team-mini-llm/.venv/bin/python" -u "/abs/path/to/team-mini-llm/train.py" --config "/abs/path/to/team-mini-llm/configs/config_medium.json" > "/abs/path/to/team-mini-llm/train_wt103.log" 2>&1 &
+tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
+```
+
 `uv sync` 会创建 `.venv` 并以可编辑方式安装本包，`import mini_llm` 无需再手动设 `PYTHONPATH`。
 
 语料加载顺序：`TEAM_LLM_DATA_DIR` → 同级 `LLMs-from-scratch/ch02/...` 中的同名文件（离线）→ 按配置中的 `url` 下载到 `runs/<run_name>/data_cache/`。Checkpoint 默认写在 `runs/<run_name>/checkpoint_latest.pt`。
@@ -98,6 +118,7 @@ uv run pytest
 | [`configs/config.json`](configs/config.json) | 超参与数据相关配置 |
 | [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m05_generate/` |
 | [`train.py`](train.py) | 训练入口（预训练循环、损失、评估） |
+| [`generate_from_checkpoint.py`](generate_from_checkpoint.py) | 加载 `checkpoint_*.pt` 做文本生成（检验效果） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |
 | [`HARNESS.md`](HARNESS.md) | Harness 工程：分层、Part I/II REQ、需求模板 |
 | [`docs/README.md`](docs/README.md) | 模块级设计文档索引（如 m01 分词器详设） |

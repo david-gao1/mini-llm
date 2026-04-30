@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gc
 import os
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -14,6 +15,26 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from mini_llm.m01_tokenizer import encode_text
+
+
+def _save_token_cache_async(
+    train_tokens: torch.Tensor,
+    val_tokens: torch.Tensor,
+    train_pt: Path,
+    val_pt: Path,
+) -> None:
+    """后台保存 token cache，避免阻塞训练启动。"""
+    try:
+        t0 = time.time()
+        train_tmp = train_pt.with_suffix(train_pt.suffix + ".tmp")
+        val_tmp = val_pt.with_suffix(val_pt.suffix + ".tmp")
+        torch.save(train_tokens, train_tmp)
+        torch.save(val_tokens, val_tmp)
+        train_tmp.replace(train_pt)
+        val_tmp.replace(val_pt)
+        print(f"[Saving token cache] done ({time.time() - t0:.1f}s)")
+    except Exception as e:
+        print(f"[Saving token cache] failed: {e}")
 
 
 class GPTDataset(Dataset):
@@ -245,10 +266,20 @@ def train_val_dataloaders(
 
     if cache_dir is not None:
         cache_dir.mkdir(parents=True, exist_ok=True)
-        t0 = time.time()
-        print("[Saving token cache] ...", end="", flush=True)
-        torch.save(train_loader.dataset._tokens, train_pt)
-        torch.save(val_loader.dataset._tokens, val_pt)
-        print(f" done ({time.time() - t0:.1f}s)")
+        if train_pt is not None and val_pt is not None:
+            if train_pt.is_file() and val_pt.is_file():
+                print("[Saving token cache] skipped (cache already exists)")
+            else:
+                print("[Saving token cache] started in background")
+                threading.Thread(
+                    target=_save_token_cache_async,
+                    args=(
+                        train_loader.dataset._tokens,
+                        val_loader.dataset._tokens,
+                        train_pt,
+                        val_pt,
+                    ),
+                    daemon=True,
+                ).start()
 
     return train_loader, val_loader

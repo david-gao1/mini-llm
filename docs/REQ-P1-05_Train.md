@@ -41,7 +41,7 @@
 **关键设计决策**：
 - 损失函数：标准 `cross_entropy`，logits 与 target 展平后计算
 - global_step 从 0 开始，`optimizer.step()` 后 +1
-- 每 epoch 结束时调用 `generate_text_simple` 打印生成样本，直观观察训练效果
+- 每 epoch 结束时调用 `generate`（temperature / top-k）打印生成样本（P1-06 起与 `generate_text_simple` 贪心模式区分），直观观察训练效果
 - 词表不一致时打 warning 而非直接报错，留给开发者判断
 
 ---
@@ -118,8 +118,8 @@ main() -> int  # 0=成功，1=失败
 | R4 | 评估模式 | `model.eval()` + `torch.no_grad()` 下计算 eval loss | 避免 dropout 影响 |
 | R5 | 评估频率 | 每 `eval_freq` 步打印 train/val loss | 每 5 步 |
 | R6 | Checkpoint | 每 `checkpoint_every_steps` 步 + 训练结束时保存 | 每 50 步 |
-| R7 | 文本采样 | 每 epoch 结束用 `generate_text_simple` 生成 50 token | `"Every effort moves you"` 起始 |
-| R8 | 设备选择 | `"auto"` → CUDA 可用则用 CUDA，否则 CPU | — |
+| R7 | 文本采样 | 每 epoch 结束用 `generate` 生成至多 50 token（具体 temperature/top-k 以 `train.py` 为准；当前为 temperature=0.8, top_k=25） | `start_context` 配置项起始 |
+| R8 | 设备选择 | `"auto"` → CUDA 优先，其次 MPS，否则 CPU（与 P1-06 一致） | — |
 | R9 | 词表校验 | 启动时检查 tokenizer vs config 词表，不一致打 warning | 非致命 |
 | R10 | 随机种子 | `random` + `torch.manual_seed` + CUDA seed | seed=123 |
 

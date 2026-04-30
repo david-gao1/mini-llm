@@ -9,7 +9,7 @@
 
 ## 1. 背景与目标
 
-项目在 GPT-2 Small 兼容架构（本仓库 `GPTModel` + WikiText-103 预训练 checkpoint）上，按 REQ-P2-02 完成 **SMS 垃圾短信二分类微调**：标签 `ham=0`、`spam=1`，产出 `runs/spam_classify/checkpoint_best.pt`，并由 REQ-P2-03 的 [`classify_sms.py`](../classify_sms.py) 做单条推理。
+项目在 GPT-2 Small 兼容架构（本仓库 `GPTModel` + WikiText-103 预训练 checkpoint）上，按 REQ-P2-02 完成 **SMS 垃圾短信二分类微调**：标签 `ham=0`、`spam=1`。训练可产出 **`runs/spam_classify/`**（[`config_classify_spam.json`](../configs/config_classify_spam.json)，解冻末 1 block）与 **`runs/spam_classify_phase_b/`**（[`config_classify_spam_phase_b.json`](../configs/config_classify_spam_phase_b.json)，解冻末 2 block）。**文档与脚本默认演示路径**为 **`runs/spam_classify_phase_b/checkpoint_best.pt`**（对照结论见 §7.3「对照实验说明了什么」）；单条推理见 REQ-P2-03 [`classify_sms.py`](../classify_sms.py)。
 
 数据管线来自 **UCI SMS Spam Collection**：原始极度不平衡（ham 远多于 spam），实现上对 ham **随机下采样**至与 spam 等量后再 **70% / 10% / 20%** 划分 train / val / test，`random_state=123` 固定（见 `mini_llm.m06_classify_finetune.download_and_prepare_spam`）。
 
@@ -35,7 +35,7 @@
 |------|------|
 | 训练 | 成功；规模量级约 train ≈1045 / val ≈149 / test ≈300（与平衡后划分一致） |
 | 聚合指标 | Test accuracy 约 **96%**；best 验证集 accuracy 约 **95%**（依 checkpoint 保存逻辑） |
-| 推理命令示例 | `uv run python classify_sms.py --checkpoint runs/spam_classify/checkpoint_best.pt --text 'WINNER!! You have been selected for a free prize call now' --probs` |
+| 推理命令示例 | （历史记录）基线权重：`classify_sms.py --checkpoint runs/spam_classify/checkpoint_best.pt`；**当前默认演示**见 §8（`spam_classify_phase_b`） |
 | 预测 | **ham** |
 | 概率 | **P(ham)=0.8341，P(spam)=0.1659**（`--probs` 详见 REQ-P2-03：概率走 stderr，stdout 单行标签） |
 
@@ -85,12 +85,75 @@
 
 ### 7.3 阶段 B：训练与数据试错
 
+#### 对照实验的业务逻辑（写给 Java 背景的 Owner）
+
+**我们要解决的业务问题**：短信分类器在实际使用里最「疼」的是 **漏判垃圾（FN）**——真 spam 被判成 ham，等于放行了一条骚扰或诈骗话术。此前出现过「整体验证指标很好看，但某条典型 spam 话术仍高置信判 ham」的情况（见本文 §3），所以需要一种 **成本低、可重复** 的手段探索「能不能在不推倒重写的前提下，再多挤出一点 spam 捕获能力」。
+
+**对照实验在做什么（用人话说）**：  
+用 **同一套训练脚本、同一批数据、同一种保存 best 的规则**，只改 **「有多少层神经网络允许在本次任务里继续学习」**——跑两轮训练，得到 **两个 checkpoint**，再在 **同一张测试卷（test.csv）** 上打分，对比 **漏判数量 FN** 和 **spam 召回 Recall**。这就像：
+
+- **同一套业务代码库**，打两个 **不同 JVM 启动参数或 Spring Profile** 的包（这里是「解冻层数」不同）；  
+- **同一套集成测试套件**（这里是固定的 test 划分）；  
+- **产物是两个可部署的 artifact**：`runs/spam_classify/` 与 `runs/spam_classify_phase_b/`，**互不覆盖**，便于并排 diff。
+
+**两条分支分别代表什么**：
+
+| 分支 | 配置 | 业务含义（直觉） |
+|------|------|------------------|
+| **基线** | `config_classify_spam.json`，解冻末 **1** 个 Transformer block | 「尽量少动预训练底座」，训练快、不易过拟合，但对难样本可能欠表达。 |
+| **阶段 B** | `config_classify_spam_phase_b.json`，解冻末 **2** 个 block | 「允许多一层适配下游」，表达能力略升，可能更好抓某些 spam 模板，也可能在小数据上更容易 **过拟合**（验证集好、测试集未必好）。 |
+
+**不算「上线决策」，算「实验记录」**：  
+本对照 **不要求** phase_b 一定优于基线；**要求**的是：跑完后把两边的 **混淆矩阵 / spam 的 P/R/F1 / FN 条数**记下来（或贴进运行笔记），便于半年后回看「当时我们尝试过加大可训练深度，结论是 A 还是 B」。若 phase_b 明显变差，回滚到基线 checkpoint 即可——没有数据库迁移、没有接口破坏性变更，只是换一个 `.pt` 文件。
+
+**你可能关心的工程差异**：解冻层变多 → **每次反向传播要更新的参数更多**，单 step 可能略慢、显存/内存略涨；epoch 数不变时，总耗时会上去一点——类比「多打开了几层模块的 hot reload / 更重的 bean 图」，仍在同一进程同一入口脚本内完成。
+
+---
+
+**对照配置（已落盘）**：[`configs/config_classify_spam_phase_b.json`](../configs/config_classify_spam_phase_b.json) — `unfreeze_last_n_blocks: 2`，`run_name: spam_classify_phase_b`（写出到 `runs/spam_classify_phase_b/`，不覆盖默认 `spam_classify`）。
+
+```bash
+# 基线（末 1 块解冻）
+uv run python finetune_classify.py --config configs/config_classify_spam.json
+
+# 阶段 B（末 2 块解冻）
+uv run python finetune_classify.py --config configs/config_classify_spam_phase_b.json
+
+# 分别评估（对比 spam R / FN）
+uv run python eval_classify.py --checkpoint runs/spam_classify/checkpoint_best.pt
+uv run python eval_classify.py --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt
+```
+
 | 序号 | 动作 |
 |------|------|
-| B1 | `unfreeze_last_n_blocks: 2` 或谨慎增加 epoch |
-| B2 | 学习率小幅网格（如 `3e-5`～`8e-5`），仍以 val 选 best |
+| B1 | `unfreeze_last_n_blocks: 2`（见上 phase_b 配置）或谨慎增加 epoch |
+| B2 | 学习率小幅网格（如 `3e-5`～`8e-5`），仍可复制 phase_b 改 `learning_rate` + 换新 `run_name` |
 | B3 | 规则级数据增强（spam，需谨慎） |
 | B4 | **BL-P2-02-04**：全量 ham + 类权重 CE，与下采样对照 |
+
+#### 对照实验运行记录（一次实际跑数，便于复盘）
+
+**环境**：同一 `data_cache/sms_spam` 划分、`seed=123`；预训练 `runs/gpt2_small_wikitext103/checkpoint_best.pt`；设备 MPS；训练约 **55s**（phase_b）。
+
+| 指标 | 基线 `runs/spam_classify/checkpoint_best.pt` | 阶段 B `runs/spam_classify_phase_b/checkpoint_best.pt` |
+|------|-----------------------------------------------|--------------------------------------------------------|
+| 可训练参数占比（日志打印） | （本次未重训基线；历史约 5–6%） | **11.4%**（解冻末 2 block） |
+| Test accuracy | **93.33%** | **96.33%** |
+| 混淆矩阵 TN / FP / FN / TP | 144 / 5 / **15** / 136 | 147 / 2 / **9** / 142 |
+| spam Recall（R） | 0.9007 | **0.9404** |
+| spam F1 | 0.9315 | **0.9627** |
+| FN CSV 条数（test 漏判 spam） | **15** | **9** |
+| 探针：`WINNER!! You have been selected...` | （此前 **基线** 报告：ham，P(ham)≈0.83） | **spam**，`P(spam)=0.6300` |
+
+#### 对照实验说明了什么（结论归档）
+
+1. **假设得到支持**：漏判与「微调深度不够」一致——仅把可训练深度从末 **1** 个 block 加到 **2** 个，在同一数据与随机种子下，**test 上 FN 减少、spam Recall/F1 上升**，说明模型有更多容量把决策边界推向「少漏 spam」一侧。
+2. **整体指标与探针同向**：不仅表格数字变好，原先 **高置信 ham** 的模板句在 phase_b 下改为 **spam**（置信中等），与「减少 FN」的业务目标一致。
+3. **不是普遍定理**：只在 **当前划分、当前预训练 checkpoint、当前 lr/epoch** 下成立；换数据或解冻更多层可能 **过拟合** 或变差，故仍需每次记录 `eval_classify` 输出。
+4. **工程类比（Java）**：同一应用两套 **profile**，一套少放开可写模块、一套多放开一层；用 **同一套集成测试（test.csv）** 比失败用例数；phase_b 这轮 **失败用例更少**，故仓库把 **默认 artifact** 指到 phase_b，避免后人演示仍拿旧 profile。
+5. **不能推出的结论**：不等于上线安全；不等于英文域外话术全覆盖；**FP（误杀 ham）** 仍需业务权衡。
+
+**文档与脚本默认**：[`classify_sms.py`](../classify_sms.py)、[`eval_classify.py`](../eval_classify.py) 及本文 §8 示例均以 **`runs/spam_classify_phase_b/checkpoint_best.pt`** 为默认路径；基线路径 **`runs/spam_classify/...`** 保留用于对照复现。**注意**：磁盘上基线 `.pt` 若来自不同训练时刻，`eval_classify` 数字可能与早期对话记录不完全一致；并排对比以当场打印为准。
 
 ### 7.4 阶段 C：工程体验（可选）
 
@@ -104,9 +167,9 @@
 
 ### 7.6 阶段 A 落地状态（已实现）
 
+- **`classify_sms.py` / `eval_classify.py`**：**默认 `--checkpoint`** = **`runs/spam_classify_phase_b/checkpoint_best.pt`**（对照结论见 §7.3「对照实验说明了什么」）；基线路径 **`runs/spam_classify/...`** 仍可用于对照。`eval_classify` 另将 FN 默认写入 **checkpoint 同目录**下的 `eval_false_negative_spam.csv`。
 - **`mini_llm.m06_classify_finetune`**：`collect_predictions_loader`、`confusion_counts_binary_spam`、`prf1_from_counts`、`export_false_negative_spam_csv`、`format_classification_eval_lines`。
 - **`finetune_classify.py`**：训练结束后加载 **best val** 权重（而非最后一 epoch），在 **test** 上打印混淆矩阵与 spam/ham 的 P/R/F1，并将 FN（真实 spam、预测 ham）导出至 ``runs/<run_name>/test_false_negative_spam.csv``。
-- **`eval_classify.py`**：对已有 checkpoint 单独跑同上评估（默认 `<data_dir>/test.csv`，FN 默认写入 checkpoint 同目录下的 `eval_false_negative_spam.csv`）。
 - **探针清单**：[`docs/probes/classify_spam_probes.json`](probes/classify_spam_probes.json)，供人工或脚本对照 `classify_sms`。
 
 ### 7.7 建议节奏（后续）
@@ -119,19 +182,22 @@
 ## 8. 复现实验命令备忘
 
 ```bash
-# 单独评估（混淆矩阵、spam PRF1、导出 FN CSV）
+# 单独评估（混淆矩阵、spam PRF1、导出 FN CSV）——默认推荐权重
 uv run python eval_classify.py \
-  --checkpoint runs/spam_classify/checkpoint_best.pt
+  --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt
+
+# 基线对照（须存在 runs/spam_classify/checkpoint_best.pt）
+# uv run python eval_classify.py --checkpoint runs/spam_classify/checkpoint_best.pt
 
 # 单条推理 + 概率（stderr）
 uv run python classify_sms.py \
-  --checkpoint runs/spam_classify/checkpoint_best.pt \
+  --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt \
   --text 'WINNER!! You have been selected for a free prize call now' \
   --probs
 
 # 若需同一终端内顺序稳定的合并输出（示例）
 uv run python classify_sms.py \
-  --checkpoint runs/spam_classify/checkpoint_best.pt \
+  --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt \
   --text 'WINNER!! You have been selected for a free prize call now' \
   --probs 2>&1 | tee classify_out.txt
 ```

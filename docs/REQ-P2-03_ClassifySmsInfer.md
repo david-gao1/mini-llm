@@ -27,7 +27,7 @@
 **为什么 `--probs` 打到 stderr**：stdout 保持「单行标签」，便于 shell 管道把类别传给下游；概率仅供人工查看。
 
 **关键设计决策**：
-- 默认 checkpoint：`runs/spam_classify/checkpoint_best.pt`
+- **默认 checkpoint（演示 / 少漏判 spam）**：`runs/spam_classify_phase_b/checkpoint_best.pt`（须先按 [`REPORT_ClassifySpamProbe.md`](REPORT_ClassifySpamProbe.md) §7.3 跑阶段 B；见对照结论 §7.3「对照实验说明了什么」）。仅跑 [`configs/config_classify_spam.json`](../configs/config_classify_spam.json) 时产出为 `runs/spam_classify/checkpoint_best.pt`（基线目录）。
 - 设备：`auto` → CUDA → MPS → CPU（与 `train.py` 一致）
 - 标签打印名：`0 → ham`，`1 → spam`（与 P2-02 CSV 映射一致）
 
@@ -64,7 +64,7 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 
 | 参数 | 说明 |
 |------|------|
-| `--checkpoint` | 分类 checkpoint 路径 |
+| `--checkpoint` | 分类 checkpoint；**省略时默认** `runs/spam_classify_phase_b/checkpoint_best.pt`（须已训练）；基线对照用 `runs/spam_classify/checkpoint_best.pt` |
 | `--text` | 一条短信；省略则从 **stdin 读一行** |
 | `--device` | `auto` \| `cpu` \| `cuda` \| `mps` |
 | `--max-length` | 覆盖 checkpoint 中的序列长度 |

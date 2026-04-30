@@ -125,8 +125,11 @@
 | 2 | 日志末尾找 `Test accuracy` | 百分比 | **≥ 90% 合格**（我们实际约 96%） |
 | 3 | 日志末尾找混淆矩阵那几行 | `TN=? FP=? / FN=? TP=?` | **FN 越小越好**（FN = 真垃圾被放过去了） |
 | 4 | 日志里找 `Recall_spam`（`R=` 后面的数） | 0 到 1 之间的小数 | **≥ 0.90 合格**；< 0.80 说明漏判严重，需要讨论 |
-| 5 | 检查 `runs/spam_classify/checkpoint_best.pt` | 文件存在 | ✅ |
-| 6 | 检查 `runs/spam_classify/test_false_negative_spam.csv` | 文件存在 | ✅（里面是被漏判的垃圾短信，可以用 Excel 打开看看） |
+| 5 | 检查 **`runs/spam_classify_phase_b/checkpoint_best.pt`**（推荐演示） | 文件存在 | ✅（须跑过 `config_classify_spam_phase_b.json`） |
+| 6 | 检查 `runs/spam_classify_phase_b/test_false_negative_spam.csv` | 训练末尾导出存在 | ✅；基线目录 `runs/spam_classify/` 仅在做对照时出现 |
+| 7 | `uv run python eval_classify.py`（可省略 `--checkpoint`，脚本默认 phase_b） | 混淆矩阵 + PRF | 须已有 `runs/spam_classify_phase_b/checkpoint_best.pt` |
+
+> **两种训练产出**：`config_classify_spam.json` → `runs/spam_classify/`（基线）；**演示默认**用 `config_classify_spam_phase_b.json` → `runs/spam_classify_phase_b/`（见 REPORT §7.3）。
 
 #### 混淆矩阵怎么读（4 个格子）
 
@@ -156,7 +159,14 @@
 
 | # | 你跑什么 | 你看什么 | 怎么判断 |
 |---|---------|---------|---------|
-| 1 | `uv run python eval_classify.py --checkpoint runs/spam_classify/checkpoint_best.pt` | 同上的混淆矩阵 + PRF | 与训练结束时的数字**完全一致**（因为用的同一个 checkpoint + 同一个 test.csv） |
+| 1 | `uv run python eval_classify.py` 或 `--checkpoint runs/spam_classify_phase_b/checkpoint_best.pt` | 混淆矩阵 + PRF | 与「刚才用 phase_b 训练结束」打印一致；**基线对照**时改用 `runs/spam_classify/checkpoint_best.pt` |
+
+#### 可选：阶段 B 对照（解冻 2 块，REQ §10 BL-P2-02-06）
+
+| # | 你跑什么 | 你看什么 | 怎么判断 |
+|---|---------|---------|---------|
+| 1 | `uv run python finetune_classify.py --config configs/config_classify_spam_phase_b.json` | 日志末尾 spam **R**、**FN** | 写出 `runs/spam_classify_phase_b/checkpoint_best.pt`，**不覆盖**基线目录 |
+| 2 | `uv run python eval_classify.py`（默认已是 phase_b）或显式 `--checkpoint runs/spam_classify_phase_b/checkpoint_best.pt` | 与基线 `spam_classify` 并排对比 | Recall_spam ↑ 且 FN ↓ → 更好抓 spam；若变差 → 讨论 lr / epoch |
 
 ---
 
@@ -166,8 +176,8 @@
 
 | # | 你跑什么 | 你看什么 | 怎么判断 |
 |---|---------|---------|---------|
-| 1 | `uv run python classify_sms.py --checkpoint runs/spam_classify/checkpoint_best.pt --text 'Thanks see you tomorrow'` | `ham` | ✅ 正常短信判成 ham |
-| 2 | `uv run python classify_sms.py --checkpoint runs/spam_classify/checkpoint_best.pt --text 'URGENT FREE prize call now'` | `ham` 或 `spam` | 预期 spam；如果判 ham → **不一定是 bug**，可能是模型没见过这种模板（我们已记录在 REPORT 里） |
+| 1 | `uv run python classify_sms.py --text 'Thanks see you tomorrow'`（可省略 `--checkpoint`，默认 phase_b） | `ham` | ✅ |
+| 2 | `uv run python classify_sms.py --text 'URGENT FREE prize call now'` | `ham` 或 `spam` | 预期 spam；判 ham 时对照权重是否为 phase_b |
 | 3 | 加 `--probs` 看概率 | `P(ham)=0.xx P(spam)=0.xx` | 两个加起来 ≈ 1.0；如果 spam 的概率 > 0.5 但输出 ham → **那才是 bug** |
 
 **单条推理 vs 整集指标的关系**：整集 96% 准确率 ≠ 每条都对。就像你的 Java 单元测试覆盖率 96% ≠ 没有 bug。单条试错是 **探针**，不能替代 `eval_classify` 的系统评估。
@@ -234,7 +244,7 @@ test 集（约 300 条）——训练时模型**从未见过**这些短信。如
 <details>
 <summary>参考</summary>
 
-**一样**——因为读的是同一个 `checkpoint_best.pt` + 同一个 `test.csv`、`random_state` 固定、`shuffle=False`。如果不一样，说明有个地方的数据路径或权重加载出了问题，要查。
+**在路径一致的前提下一样**：对 **同一个** `checkpoint_best.pt`（同一 `run_name` 目录）+ 同一 `test.csv`、`shuffle=False`，`eval_classify` 与训练末尾打印应一致。若你改了默认 `--checkpoint`（例如切到 phase_b）而训练日志来自另一目录，比较的应是 **各自目录下** 的那份权重，而不是混用。
 
 </details>
 

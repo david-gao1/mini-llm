@@ -1,6 +1,6 @@
 # Learning Log：思考题
 
-**用法**：每完成一个 REQ，AI 在这里追加一组问题。不给答案——先自己想，想不通再讨论。
+**用法**：每完成一个 REQ，AI 在这里追加一组问题。不给答案——先自己想，想不通再讨论。**SMS 分类**：`classify_sms` / `eval_classify` 默认 checkpoint 为 **`runs/spam_classify_phase_b/checkpoint_best.pt`**（须先训练）；基线对照见 [`REPORT_ClassifySpamProbe.md`](REPORT_ClassifySpamProbe.md) §7.3。
 
 ---
 
@@ -79,3 +79,16 @@
 ---
 
 *每完成新的 REQ，AI 会在这里追加新的问题。*
+
+---
+
+## EXP · 阶段 B 解冻层对照（BL-P2-02-06）
+
+1. 基线与 phase_b 的唯一差别是 `unfreeze_last_n_blocks`。多解冻一层，理论上会增加多少**可训练参数**？（粗估即可：每层 Transformer 大约同等体量。）
+2. 若 phase_b 的 **test accuracy** 略升但 **Recall_spam** 下降，你会优先信哪一个指标？为什么？
+3. 若两份 checkpoint 在探针句上结论相反（一句判 ham、一句判 spam），你会相信 **test 集指标** 还是 **探针**？为什么？
+4. 文档把默认 `--checkpoint` 指到 **`spam_classify_phase_b`**——新人克隆仓库后 **没训练过** 就跑 `classify_sms.py`，最可能遇到什么？该怎么解决？
+
+TN / FP / FN / TP 还是分不清楚是什么意思。。。
+
+

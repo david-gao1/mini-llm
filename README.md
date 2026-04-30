@@ -50,6 +50,16 @@ uv run python generate_from_checkpoint.py \
 
 详见 [`generate_from_checkpoint.py`](generate_from_checkpoint.py) 文件头注释；运行报告里亦写有示例 [`docs/RUN_REPORT_gpt2_small_wikitext103.md`](docs/RUN_REPORT_gpt2_small_wikitext103.md)。
 
+**SMS 分类（ham/spam）**：先微调 [`finetune_classify.py`](finetune_classify.py)（推荐演示权重：`configs/config_classify_spam_phase_b.json` → `runs/spam_classify_phase_b/`），再推理；**省略 `--checkpoint` 时默认该路径**。
+
+```bash
+uv run python finetune_classify.py --config configs/config_classify_spam_phase_b.json
+uv run python classify_sms.py --text "Thanks see you tomorrow"
+uv run python eval_classify.py
+```
+
+对照结论与健康阈值见 [`docs/REPORT_ClassifySpamProbe.md`](docs/REPORT_ClassifySpamProbe.md)、验收手册 [`docs/OWNER_CHECKLIST.md`](docs/OWNER_CHECKLIST.md)。
+
 长任务（如 WikiText-103）建议使用项目虚拟环境绝对路径 + 无缓冲日志，避免 `uv` 在不同终端上下文里切到上级目录导致找不到 `train.py`，以及日志长时间不刷新：
 
 ```bash
@@ -123,7 +133,7 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 | [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m06_classify_finetune/` |
 | [`train.py`](train.py) | 训练入口（预训练循环、损失、评估） |
 | [`finetune_classify.py`](finetune_classify.py) | SMS Spam 分类微调（第六章对齐） |
-| [`classify_sms.py`](classify_sms.py) | 加载微调后的 `checkpoint_best.pt`，单行英文短信 → `ham` / `spam` |
+| [`classify_sms.py`](classify_sms.py) | 加载微调后的权重（**默认** `runs/spam_classify_phase_b/checkpoint_best.pt`），单行英文短信 → `ham` / `spam` |
 | [`generate_from_checkpoint.py`](generate_from_checkpoint.py) | 加载 `checkpoint_*.pt` 做文本生成（检验效果） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |
 | [`HARNESS.md`](HARNESS.md) | Harness 工程：分层、Part I/II REQ、需求模板 |

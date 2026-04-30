@@ -505,7 +505,7 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 
 ### classify_sms.py（CLI）
 
-- **输入**：`--checkpoint`（默认 `runs/spam_classify/checkpoint_best.pt`）；`--text` 或 stdin；可选 `--device`、`--max-length`、`--probs`。
+- **输入**：`--checkpoint`（默认 `runs/spam_classify_phase_b/checkpoint_best.pt`）；`--text` 或 stdin；可选 `--device`、`--max-length`、`--probs`。
 - **输出**：stdout 单行 `ham` | `spam`。
 
 ### 分类 checkpoint（读取）

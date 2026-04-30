@@ -458,7 +458,7 @@ uv run python generate_from_checkpoint.py \
 
 #### 6.6.3 为何报告前 reload **best val** checkpoint
 
-训练最后一轮的权重未必是 **验证集上最优** 的那一轮；保存到磁盘的 `checkpoint_best.pt` 才是默认交付物。若在最后一 epoch 上算 test，会与 **`classify_sms.py` 加载的权重** 不一致。因此 **`finetune_classify.py`** 在打混淆矩阵和写 **FN CSV** 之前，从 `checkpoint_best.pt` **重新加载** `model_state_dict`。
+训练最后一轮的权重未必是 **验证集上最优** 的那一轮；保存到磁盘的 `checkpoint_best.pt` 才是默认交付物。若在最后一 epoch 上算 test，会与 **`classify_sms.py`**（默认加载 **`runs/spam_classify_phase_b/checkpoint_best.pt`**）**实际给用户看的权重** 不一致。因此 **`finetune_classify.py`** 在打混淆矩阵和写 **FN CSV** 之前，从 `checkpoint_best.pt` **重新加载** `model_state_dict`。
 
 #### 6.6.4 FN CSV 与探针清单
 
@@ -468,7 +468,7 @@ uv run python generate_from_checkpoint.py \
 #### 6.6.5 与单条推理的分工
 
 - **`classify_sms.py`**（P2-03）：product/API 形态，stdin/`--text` → stdout 标签；`--probs` 辅助看置信度。
-- **`eval_classify.py`**：离线批量指标与 FN 审计，与 REQ-P2-02 **§4**、**§11** 契约一致。
+- **`eval_classify.py`**：离线批量指标与 FN 审计；**默认 checkpoint** 与 `classify_sms.py` 一致（`spam_classify_phase_b`）。REQ-P2-02 **§4**、**§11** 契约一致。
 
 **其余 backlog**（加权 CE、官方 GPT-2 权重对照、`--smoke` 等）仍见 [`REQ-P2-02_ClassifyFinetune.md`](REQ-P2-02_ClassifyFinetune.md) **§10**。
 
@@ -503,7 +503,7 @@ team-mini-llm/
 ├── train.py                     预训练入口（编排层）
 ├── finetune_classify.py         分类微调入口（末段 best→test 指标 + FN CSV）
 ├── eval_classify.py             已有分类 checkpoint → test 混淆矩阵 / PRF / FN CSV
-├── classify_sms.py              分类 checkpoint → 单行英文短信 → ham / spam
+├── classify_sms.py              默认加载 **spam_classify_phase_b** checkpoint → 单行英文短信 → ham / spam
 ├── generate_from_checkpoint.py   加载 checkpoint 做文本生成（人工检验）
 │
 ├── tests/                       pytest 测试套件

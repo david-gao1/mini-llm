@@ -5,14 +5,14 @@
 
 用法
 ----
-uv run python eval_classify.py --checkpoint runs/spam_classify/checkpoint_best.pt
+uv run python eval_classify.py --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt
 
 指定测试集与 FN 导出路径::
 
   uv run python eval_classify.py \\
-    --checkpoint runs/spam_classify/checkpoint_best.pt \\
+    --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt \\
     --test-csv data_cache/sms_spam/test.csv \\
-    --fn-out runs/spam_classify/eval_fn.csv
+    --fn-out runs/spam_classify_phase_b/eval_fn.csv
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def main() -> int:
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        default=_ROOT / "runs" / "spam_classify" / "checkpoint_best.pt",
+        default=_ROOT / "runs" / "spam_classify_phase_b" / "checkpoint_best.pt",
         help="Classification finetune checkpoint",
     )
     parser.add_argument("--test-csv", type=Path, default=None, help="Default: <data_dir>/test.csv from checkpoint meta")

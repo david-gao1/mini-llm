@@ -6,12 +6,12 @@
 用法
 ----
 uv run python classify_sms.py \\
-  --checkpoint runs/spam_classify/checkpoint_best.pt \\
+  --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt \\
   --text "WINNER!! As a valued network customer you have been selected..."
 
 从标准输入读一行（无 ``--text`` 时）::
 
-  echo "See you at 8pm" | uv run python classify_sms.py --checkpoint runs/spam_classify/checkpoint_best.pt
+  echo "See you at 8pm" | uv run python classify_sms.py --checkpoint runs/spam_classify_phase_b/checkpoint_best.pt
 
 可选 ``--probs`` 打印 softmax 概率；``--max-length`` 覆盖 checkpoint 中的序列长度（旧 checkpoint 未含长度时需指定）。
 """
@@ -60,8 +60,8 @@ def main() -> int:
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        default=_ROOT / "runs" / "spam_classify" / "checkpoint_best.pt",
-        help="Path from finetune_classify.py (default: runs/spam_classify/checkpoint_best.pt)",
+        default=_ROOT / "runs" / "spam_classify_phase_b" / "checkpoint_best.pt",
+        help="Path from finetune_classify.py (default: runs/spam_classify_phase_b/checkpoint_best.pt)",
     )
     parser.add_argument("--text", type=str, default=None, help="SMS text (English); omit to read one line from stdin")
     parser.add_argument("--device", type=str, default="auto", help="auto | cpu | cuda | mps")

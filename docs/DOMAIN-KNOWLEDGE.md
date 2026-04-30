@@ -413,7 +413,7 @@ uv run python generate_from_checkpoint.py \
 **若在本项目路线上的务实延展（由易到难）：**
 
 1. **对比 baseline**：直接试用开源 Chat 模型或 API，理解「预训练基座」与「对话模型」的差距。  
-2. **在现有 checkpoint 上做小规模指令微调**：自备中英文指令–回答 JSON/文本，套对话模板（如 user/assistant 标记），复用 `GPTModel` + 短训练循环（可用更小 LR、可选 LoRA 等参数高效方法——需额外实现或引入库）。预期：**话术与格式会靠近对话**，世界知识仍主要来自当前底座。  
+2. **在现有 checkpoint 上做小规模指令微调**：详见已定 [**REQ-P3-01**](REQ-P3-01_Ch07InstructionSFT.md)：对齐书本第 7 章数据与脚本逻辑，**仅 SFT**；**Small + 短指令集** 与 **GPT-2 Medium 底座** 两轨并行推进；**DPO / 偏好** 记在 REQ-P3-01 §9 backlog，不作为本条前置。（若想中英自备 JSON，仍可套用同一管线，但以书里 `instruction-data.json` 为第一对照源。）  
 3. **更大预训练或更多语料**：提升语言与事实的上限，时间与算力显著增加。  
 4. **应用层 RAG**：若要可控的事实问答，在推理管线外挂检索。
 
@@ -532,6 +532,7 @@ team-mini-llm/
 │   ├── REQ-P2-01_Generate.md
 │   ├── REQ-P2-02_ClassifyFinetune.md
 │   ├── REQ-P2-03_ClassifySmsInfer.md
+│   ├── REQ-P3-01_Ch07InstructionSFT.md
 │   ├── probes/                  SMS 分类回归探针（JSON）
 │   │   └── classify_spam_probes.json
 │   └── process/                 流程规范（产品/开发/测试/迭代）
@@ -597,6 +598,7 @@ P1-07  GPT-2 Medium          wip     WikiText-103 raw 训练中
   ── GPT-2 Small            done    163M, WikiText-103, val_loss=3.3092
 P2-02  finetune_classify  预训练 GPT→SMS ham/spam `.pt`   done    REQ-P2-02；含 BL-P2-02-02 评估与 eval_classify（DOMAIN §6.6 / REQ §11）
 P2-03  classify_sms  单行短信→ham/spam（stdout）     done    REQ-P2-03；依赖 P2-02 分类 checkpoint
+P3-01  Ch7 指令 SFT（拟定）    todo    REQ-P3-01；参考书数据；仅 SFT；Small 短集 + Medium；DPO → REQ §9
 ```
 
 ---

@@ -21,6 +21,7 @@
 | `m05_generate` | P2-01 | done | done | — |
 | `m06_classify_finetune` | P2-02 | done | done | — |
 | `classify_sms.py` | P2-03 | done | done | — |
+| `m07_instruction_finetune`（拟定） | P3-01 | todo | todo | 轨道 B：须先有 Medium checkpoint（P1-07） |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
 
@@ -525,3 +526,25 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 ### 阻塞项
 
 依赖 **P2-02** 产出的分类 checkpoint（非裸预训练 LM）。
+
+---
+
+## Part III（第 7 章 · 指令微调 SFT）
+
+## P3-01 · `m07_instruction_finetune`（拟定）— Ch7 指令 SFT（双轨 Small / Medium）
+
+**源码（拟定）** `src/mini_llm/m07_instruction_finetune/__init__.py`  
+**脚本（拟定）** `finetune_instruction.py`  
+**REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md)
+
+### 公开 API（拟定）
+
+实现后补齐：指令 `Dataset`、`format_input`、`collate`（`ignore_index`）、可选数据下载；与书本 `ch07/01_main-chapter-code/gpt_instruction_finetuning.py` 逻辑对齐。
+
+### 实现状态
+
+`todo` — **参考书数据与脚本**；仅 **SFT**；**轨道 A**：GPT-2 Small + 很短指令集；**轨道 B**：GPT-2 Medium（≈355M，[`REQ-P1-07`](docs/REQ-P1-07_GPT2Medium.md)）为起点。**DPO / 偏好** 见 REQ-P3-01 **§9 backlog**，不纳入本条验收。
+
+### 阻塞项
+
+- **轨道 B**：依赖 **P1-07** 产出可用 Medium 预训练 checkpoint。

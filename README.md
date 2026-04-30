@@ -111,7 +111,7 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 
 **必做（约第 1–2 周）**：数据与分词 → 注意力 → 模型 → 预训练（`train.py` checkpoint），与上表阶段一致。
 
-**第 3 周**：生成与采样（`m05_generate/`）；微调二选一（第 6 章式分类 / 第 7 章式指令），对照路径见 [`REFERENCE.md`](REFERENCE.md) 中 `ch06`/`ch07`。
+**第 3 周**：生成与采样（`m05_generate/`）；微调：**第 6 章式分类**（[`REQ-P2-02`](docs/REQ-P2-02_ClassifyFinetune.md)）与 **第 7 章式指令 SFT**（[`REQ-P3-01`](docs/REQ-P3-01_Ch07InstructionSFT.md)）；原书对照见 [`REFERENCE.md`](REFERENCE.md) `ch06`/`ch07`。
 
 **不做**：附录 D/E 全套、Llama/Qwen bonus、多卡 DDP（除非环境已就绪）。
 

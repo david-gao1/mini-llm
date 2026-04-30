@@ -51,3 +51,11 @@
 | P2-03 | `classify_sms.py` | 加载 **分类** checkpoint；encode/load；stdout `ham`\|`spam` | L0：同上文件（后 2 个用例，见 SPEC §P2-03）；L2：`classify_sms.py --checkpoint … --text "..."` | 编码与 Dataset 一致；CLI 可运行 |
 
 **Backlog（不阻塞上述 Harness）**：可选增强以 **`BL-P2-02-xx`** 记在 [`docs/REQ-P2-02_ClassifyFinetune.md`](docs/REQ-P2-02_ClassifyFinetune.md) §10（**BL-P2-02-02 已完成**，公式与行为见同文档 **§11**；其余如加权 CE、`--smoke`、官方 GPT-2 对照等仍为 todo）。
+
+## Part III（第 7 章 · 指令微调）
+
+| REQ-ID | 交付 | 契约要点 | Harness | 通过判据 |
+|--------|------|----------|---------|----------|
+| P3-01 | `m07_instruction_finetune`（拟定）+ `finetune_instruction.py` | 对齐书本 `instruction-data.json` + `format_input` / collate（pad→`ignore_index`）；**LM 头** next-token loss；写出 checkpoint | L0：`pytest tests/test_instruction_finetune.py`（拟定）；L3：`finetune_instruction.py --config configs/config_instruction_small.json`（拟定） | loss 有限；checkpoint 落盘；固定指令定性更像「回答」 |
+
+**Backlog**：**DPO / 偏好微调** → [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) §9（不阻塞 P3-01 SFT）。

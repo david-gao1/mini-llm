@@ -14,3 +14,5 @@
 | 环境 | `setup/` |
 
 将参考书 EPUB/PDF 放在本仓库 [`materials/`](materials/) 或仅本地保存即可（勿向公库提交未授权文件）。
+
+**team-mini-llm 第 7 章落地（指令 SFT）**：[`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md)（双轨 Small / Medium；DPO 见该 REQ §9）。

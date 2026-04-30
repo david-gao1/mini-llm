@@ -163,7 +163,7 @@ uv run python eval_classify.py --checkpoint runs/spam_classify_phase_b/checkpoin
 ### 7.5 阶段 D：架构与预训练（中长期）
 
 - 最后非 pad token / masked mean pooling 与 `[:, -1, :]` 对比。
-- **BL-P2-02-03**：OpenAI GPT-2 Small 与本仓库预训练对照（工程量大）。
+- **BL-P2-02-03**：换「预训练底座」（OpenAI 官方 GPT-2 Small vs 本仓库 WikiText 自训），其余 SMS 微调流程不变，并排看 test 指标；需权重对齐代码，见 [REQ-P2-02 §10.1](REQ-P2-02_ClassifyFinetune.md)。
 
 ### 7.6 阶段 A 落地状态（已实现）
 

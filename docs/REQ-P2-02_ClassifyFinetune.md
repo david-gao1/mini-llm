@@ -1,8 +1,8 @@
-# REQ-P2-02：分类微调（SMS Spam 二分类）
+# REQ-P2-02：finetune_classify——用 WikiText 预训练的 GPT 在 SMS 语料上学 ham / spam，产出分类 checkpoint（供 P2-03 `classify_sms`）
 
 **所属**：[SPEC.md](../SPEC.md) → Part II · 模块 06  
 **依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）、P1-07（GPT-2 Small 预训练完成）  
-**被依赖**：[REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md)（SMS 分类推理脚本）  
+**被依赖**：[REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md)（`classify_sms`：单行短信 → `ham`/`spam`）  
 **状态**：进行中（主线微调 + **BL-P2-02-02 评估扩展已并入**，见 §11）  
 **分析报告**：[REPORT_ClassifySpamProbe.md](REPORT_ClassifySpamProbe.md)（探针误判、高置信 FN、改进计划）  
 **领域详解**：[DOMAIN-KNOWLEDGE.md](DOMAIN-KNOWLEDGE.md) **§6.6**（混淆矩阵、PR/F1、FN 导出与 best checkpoint）
@@ -11,9 +11,16 @@
 
 ## 1. 业务逻辑（为什么做）
 
-### 预训练模型为什么可以使用
+> **一句话**：在已经训好的 **英文 GPT（只会下一词预测）** 上接一个 **ham/spam 二分类头**，用带标签的短信 CSV 再训一小段时间，落盘 **`checkpoint_best.pt`**（含分类权重、`spam_max_length` 等元数据）；下游 **[REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md)** 的 `classify_sms` 读的就是这份 checkpoint。
 
-预训练在本仓库中的具体产出是 **GPT-2 Small 架构 + WikiText-103** 的一次完整跑（约 163M 参数，详见 [`RUN_REPORT_gpt2_small_wikitext103.md`](RUN_REPORT_gpt2_small_wikitext103.md)）；REQ 中的 **P1-07** 在 SPEC 里仍对应「大规模预训练」主线，微调 checkpoint 路径默认指向该 Small 运行的 `checkpoint_best.pt`。
+**业务上要解决的问题**：区分 **正常短信（ham）** 与 **垃圾短信（spam）**。  
+**本 REQ 的边界**：负责 **训练侧**——数据准备、`finetune_classify.py` 训练循环、保存 checkpoint、（主线已含）test 集混淆矩阵 / spam PRF1 / FN CSV；**不负责**单条 stdin 演示 CLI（见 P2-03），也不包含 REQ §10 里标注为 backlog 的可选科研对照（除非单独拎出来做完）。
+
+### 起点：预训练在本仓库里指什么、为何还能接着做分类
+
+以下沿用仓库原有表述；若你只关心「这条 REQ 交付什么」，读完上文 **一句话** 即可跳到 §2。
+
+预训练在本仓库中的具体产出是 **GPT-2 Small 架构 + WikiText-103** 的一次完整跑（约 163M 参数，详见 [`RUN_REPORT_gpt2_small_wikitext103.md`](RUN_REPORT_gpt2_small_wikitext103.md)）；SPEC 中的 **P1-07** 仍对应「大规模预训练」主线；本 REQ 微调时 **默认加载**该 Small 跑的 `checkpoint_best.pt`（或其它兼容预训练权重）。
 
 **「基础语法和词汇能力」如何理解、算不算成立：**  
 语言模型只被训练做 **下一 token 预测**。我们没有单独跑语法标注集或词汇量测验；所谓「语法、词汇」是对现象的**通俗说法**：验证集 **val_loss** 持续下降（本跑最佳约 **3.31**，困惑度 PPL≈**27**），说明在 **WikiText 风格的英文正文**上，模型给「像维基那样接续」的序列更高概率——这在统计意义上等同于学到了该域的用词与共现规律（常被口语化成「语法 / 搭配」）。**严谨表述**：具备 **WikiText 域上的语言建模能力**；**不宣称**已通过独立的语法或语义评测。
@@ -38,7 +45,7 @@
 
 
 
-###  为什么选 SMS Spam 作为首个微调任务：
+### 为什么选 SMS Spam 作为首个微调任务
 - 二分类是最简单的分类任务，便于验证整条微调链路
 - 数据集小（约 1500 条平衡后），训练速度快（几分钟）
 - 与书本第六章对齐，便于对照学习
@@ -368,16 +375,32 @@ uv run python eval_classify.py --checkpoint runs/spam_classify_phase_b/checkpoin
 |----|------|------|----------|------|
 | **BL-P2-02-01** | 单条推理 CLI | 读一行英文短信 → stdout `ham`/`spam`，便于演示 | [REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md) · [`classify_sms.py`](../classify_sms.py) | **已完成** |
 | **BL-P2-02-02** | 分类指标扩展 | 除 accuracy 外报告 **spam** 的 precision / recall / F1；打印 **混淆矩阵**（TN/FP/FN/TP）；可选写入 `finetune_classify.py` 结束阶段或独立 `eval_classify.py` | `m06`：`collect_predictions_loader` / `confusion_counts_binary_spam` / `prf1_from_counts` / `export_false_negative_spam_csv`；[`finetune_classify.py`](../finetune_classify.py) 训练结束加载 **best val** 权重后打印并导出 `test_false_negative_spam.csv`；[`eval_classify.py`](../eval_classify.py) 仅评估 | **已完成** |
-| **BL-P2-02-03** | 预训练起点对照实验 | 在 **同一套 `GPTModel`** 上对齐加载 **OpenAI GPT-2 Small**（bias/tying 等与本书差异需单独处理），再跑 **同一套** SMS 微调流程，对比 test 指标 | 独立实验分支或 `docs/` 实验笔记；非主线 | todo |
+| **BL-P2-02-03** | 官方 GPT-2 预训练起点对照 | **要回答的问题**：SMS 分类好坏，有多少取决于「微调」，有多少取决于「预训练底座是谁训的」。**做法概要**：保持同一套 SMS 数据、`finetune_classify.py` 流程不变，只把 **预训练起点**换成「OpenAI 公布的 GPT-2 Small 权重」与本仓库「WikiText 上自训的 Small」各跑一轮，再对同一 `test.csv` 并排 `eval_classify`。**难点**：官方模型和我们手写 `GPTModel` 在 **bias、权重是否共享（weight tying）** 等细节上不一致，不能直接当同一个文件加载，要写 **对齐/映射**，工作量接近「导入第三方序列化格式」。**白话说明见 §10.1** | 独立分支或 `docs/` 实验笔记 | todo |
 | **BL-P2-02-04** | 不平衡损失权重 | **保留全量 ham**，不设平衡集；使用 `CrossEntropyLoss(weight=…)`（按类频次反比或其它配方），与当前 **下采样 ham** 做对照 | `SpamDataset`/`download_and_prepare_spam` 可选模式 + `finetune_classify.py` | todo |
 | **BL-P2-02-05** | CI / 冒烟 `--smoke` | 无大 checkpoint、无下载数据时：**极小随机 `GPTModel`** + 伪造 batch，跑固定 **N 步** optimizer step，断言 loss 有限（对齐书本 `test_mode`） | `finetune_classify.py --smoke` 或独立 pytest + `@pytest.mark.smoke` | todo |
 | **BL-P2-02-06** | 阶段 B：解冻层数 / lr 对照 | **不写独立 REQ**：属 REPORT **§7.3**；**业务动机**见「对照实验的业务逻辑」，**结论归档**见「对照实验说明了什么」。默认 [`configs/config_classify_spam.json`](../configs/config_classify_spam.json)（`unfreeze_last_n_blocks=1`）；[`configs/config_classify_spam_phase_b.json`](../configs/config_classify_spam_phase_b.json)（解冻末 **2** 块）。仓库已将 **`classify_sms` / `eval_classify` 默认 checkpoint** 指向 `spam_classify_phase_b`（须先训练产出）。 | REPORT §7.3 + 配置；并排 `eval_classify` | **已完成（对照已跑、默认路径已切换）** |
+
+### §10.1 BL-P2-02-03 白话说明（读不懂表格时只看本节）
+
+> **最关键的一句话**：用「官方 GPT-2 Small」和「本仓库 WikiText 自训」两种预训练底座，在同一套 SMS 微调流程下各训一版分类模型，再并排 `eval_classify`；难点在权重格式对齐，推理脚本不用改。
+
+**你现在用的主线**：分类微调之前，底座来自 **`train.py` 在 WikiText-103 上训出来的** GPT-2 Small 兼容 checkpoint（本仓库自己的 `GPTModel`）。
+
+**这条 backlog 想多做的一步**：再准备一条平行宇宙——底座改成 **OpenAI 公开发布的 GPT-2 Small** 权重（书名里的「官方 checkpoint」那一挂）。两边后面 **同样**：换分类头、同样的 SMS CSV、同样的超参（或刻意保持一致以便对比）。
+
+**为什么要单独列为 backlog**：官方实现和我们仓库里的 `GPTModel` **不是逐字节同一种定义**（REQ §9.2 表里写过：`qkv_bias`、有没有 **embedding 与 LM head 绑在一起** 等）。这就像 Java 里你想把一个 **别的框架 export 出来的二进制模型** 灌进自己的 POJO：**字段对不上**，要写 Adapter；还要核对张量形状和数值是否在误差范围内。
+
+**做完以后看什么**：仍然是你现在熟悉的那些数——test accuracy、spam Recall、FN、混淆矩阵。目的是 **科研式对照**：「若换成官方起点，spam 有没有更好抓？」**不是**要求替换主线；主线可以继续用 WikiText 自训权重。
+
+**和 `classify_sms.py`（REQ-P2-03）的关系**：推理脚本 **永远不会去下载 OpenAI 权重**。它只吃 **微调完成后** 写出的分类 `.pt`。BL-P2-02-03 若做完，只是磁盘上可能多一个「从官方起点训出来的」分类 checkpoint；**P2-03 的用法一行都不用改**，照样 `--checkpoint` 指过去即可。
+
+**什么时候该做**：主线 SMS 流程、指标、文档都稳定以后，当作 **拓展实验**；不适合作为课程第一周必须交付的内容。
 
 **备注**
 
 - **BL-P2-02-06**：与主线契约相同（仍为 P2-02），仅 **输出目录** 不同（`run_name` → `runs/spam_classify_phase_b/`），便于与 `runs/spam_classify/` **并排对比**，不覆盖旧 checkpoint。**仓库默认演示**的 `--checkpoint` 已指向 `spam_classify_phase_b`（见 REQ-P2-03、REPORT §7.3）。
 - **BL-P2-02-02** 动机：上线场景往往 **漏判 spam（FN）** 比误判 ham 更敏感；平衡集上 accuracy 容易「好看」，仍需看 spam 一侧指标。
-- **BL-P2-02-03** 工程量偏大，仅建议在主线稳定后作为拓展。
+- **BL-P2-02-03**：详情与动机见上 **§10.1**；工程量大，仅建议在主线稳定后作为拓展。
 - **BL-P2-02-05** 可与现有 `tests/test_classify_finetune.py` 小模型用例互补：冒烟侧重 **端到端训练循环** 而非仅 Dataset。
 
 本节取代原 §9.3 列表；验收仍以 REQ §6 与 [`HARNESS.md`](../HARNESS.md) 为准。

@@ -1,18 +1,22 @@
-# REQ-P2-03：SMS 分类推理（classify_sms）
+# REQ-P2-03：classify_sms——输入一行英文短信，stdout 输出 `ham` 或 `spam`（分类 checkpoint 须先由 P2-02 训好）
 
 **所属**：[SPEC.md](../SPEC.md) → Part II · 推理脚本（分类）  
-**依赖**：[REQ-P2-02](REQ-P2-02_ClassifyFinetune.md)（微调产出分类 checkpoint）、[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel）  
+**依赖**：[REQ-P2-02](REQ-P2-02_ClassifyFinetune.md)（`finetune_classify`：SMS ham/spam 分类 checkpoint）、[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel）  
 **被依赖**：无  
 **状态**：✅ 已完成  
-**可选后续（共享 backlog）**：[REQ-P2-02 §10](REQ-P2-02_ClassifyFinetune.md)（如 `--json` 等多输出格式）；**批量指标**（混淆矩阵、FN CSV）见 **`eval_classify.py`** 与 REQ-P2-02 **§11**。
+**可选后续（共享 backlog）**：[REQ-P2-02 §10](REQ-P2-02_ClassifyFinetune.md)（含 **`--json`** 等推理增强；以及 **BL-P2-02-03**：「换一套预训练底座再微调 SMS」的对照实验——**解释见 REQ-P2-02 §10.1**，与本 REQ 的推理契约无关）；**批量指标**见 **`eval_classify.py`** 与 REQ-P2-02 **§11**。
 
 ---
 
 ## 1. 业务逻辑（为什么做）
 
-[REQ-P2-02](REQ-P2-02_ClassifyFinetune.md) 训练完成后得到 **带分类头的 GPT checkpoint**。验收与演示需要：**不等同于预训练生成**，而是输入一条 **英文短信字符串**，输出 **ham（正常）或 spam（垃圾）**。
+> **一句话**：微调已经把「会读短信的模型」训好并存盘了；本 REQ 负责 **拿来即用**——喂一行英文短信，告诉你是 **ham（正常）** 还是 **spam（垃圾）**。
 
-单独拆成 P2-03 的理由：**契约与 Harness** 与微调（数据加载、loss、epoch）不同——推理只依赖磁盘上的分类 checkpoint + 与训练一致的编码长度；与 [`generate_from_checkpoint.py`](../generate_from_checkpoint.py)（下一词生成）并列，作为第二条「从 checkpoint 走出去」的脚本。
+上游 [REQ-P2-02](REQ-P2-02_ClassifyFinetune.md) 产出的是 **带分类头的 GPT 权重文件（checkpoint）**。业务上要的不是「接着写诗、续写句子」（那是生成），而是 **判别**：这条短信该不该当垃圾拦掉。演示和验收也围绕这件事：给人或脚本一个简单接口，输入字符串、输出类别名。
+
+**为什么单独叫 P2-03**：微调那段工作在操心 **数据怎么读、loss、训练多少轮**；这里只操心 **磁盘上已经有一个分类模型时**，怎么加载、怎么按训练时同一规则编码、怎么给出标签。它和 [`generate_from_checkpoint.py`](../generate_from_checkpoint.py) 并排——都是「从 checkpoint 接到真实用法」，一个是 **下一词生成**，一个是 **短信二分类**。
+
+**边界**：换预训练底座、官方权重对齐等 **科研对照**（例如 backlog **BL-P2-02-03**）写在 [REQ-P2-02 §10.1](REQ-P2-02_ClassifyFinetune.md)；那条跑通之后照样得到一个 `.pt`，**本 REQ 不负责下载或对权重**，只负责对这个 `.pt` 做推理。
 
 ---
 

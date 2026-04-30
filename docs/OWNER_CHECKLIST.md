@@ -113,7 +113,7 @@
 
 ## Part II — 分类微调
 
-### P2-02 · 分类微调（SMS Spam）
+### P2-02 · finetune_classify（SMS ham/spam → 分类 checkpoint）
 
 **一句话**：在预训练模型上面加一个「二选一」的分类头，用短信数据教它区分正常短信（ham）和垃圾短信（spam）。
 
@@ -170,7 +170,7 @@
 
 ---
 
-### P2-03 · classify_sms.py（单条推理）
+### P2-03 · classify_sms.py（一行英文短信 → stdout ham / spam）
 
 **一句话**：给它一条英文短信，它告诉你 ham 还是 spam。
 

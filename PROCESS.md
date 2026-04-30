@@ -61,7 +61,7 @@
 | 文档 | 说明 |
 |------|------|
 | [规格与进度追踪](SPEC.md) | 每个模块的 API 契约、实现状态、测试覆盖、闸门进度 |
-| [产品设计流程](docs/process/product-design.md) | 需求从想法到 REQ 条目的完整流程 |
+| [产品设计流程](docs/process/product-design.md) | 需求从想法到 REQ 条目的完整流程；**独立 REQ 文档**（`docs/REQ-*.md`）的业务段落写法见其中 **§5** |
 | [开发流程规范](docs/process/development.md) | 编码规范、分支策略、提交规范、代码审查 |
 | [测试流程规范](docs/process/testing.md) | 测试分层、用例编写、回归策略 |
 | [迭代与发布流程](docs/process/iteration.md) | 版本管理、迭代节奏、技术债管理 |
@@ -84,3 +84,4 @@
 2. **AI 遵循对应流程**：AI 根据角色切换行为模式（见 `.cursor/rules/process.mdc`）
 3. **产出物落地**：讨论结果必须落到文档或代码中，不停留在对话里
 4. **不跳步**：AI 不会在产品阶段直接写代码，也不会在开发阶段跳过测试
+5. **REQ 文档可读性**：新建或改写 `docs/REQ-*.md` 时，`§1 业务逻辑` 优先通俗说明「要做什么」，技术细节后置；约定见 [`docs/process/product-design.md`](docs/process/product-design.md) **§5**

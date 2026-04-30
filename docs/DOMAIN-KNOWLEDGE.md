@@ -419,7 +419,7 @@ uv run python generate_from_checkpoint.py \
 
 本节与上文 **6.4** 一起看：**6.4** 解决「英文维基模型不要用中文 prompt 误判」；**6.5** 解决「不要用 Chat 产品的预期误判 WikiText 预训练 checkpoint」。
 
-### 6.6 分类微调（P2-02 SMS Spam）
+### 6.6 分类微调（P2-02：SMS ham/spam checkpoint）
 
 **核心思路**：复用预训练模型的语言理解能力，只训练少量参数完成下游分类任务。
 
@@ -595,8 +595,8 @@ P1-07  GPT-2 Medium          wip     WikiText-103 raw 训练中
   ├─ WikiText-2 (Run 2)     done    patience=20，val_loss=5.44，过拟合
   └─ WikiText-103 (Run 3)   wip     训练进行中，目标 val_loss < 5.0
   ── GPT-2 Small            done    163M, WikiText-103, val_loss=3.3092
-P2-02  分类微调 (SMS Spam)   done    REQ-P2-02；含 BL-P2-02-02 评估与 eval_classify（DOMAIN §6.6 / REQ §11）
-P2-03  classify_sms 推理     done    REQ-P2-03；依赖分类 checkpoint
+P2-02  finetune_classify  预训练 GPT→SMS ham/spam `.pt`   done    REQ-P2-02；含 BL-P2-02-02 评估与 eval_classify（DOMAIN §6.6 / REQ §11）
+P2-03  classify_sms  单行短信→ham/spam（stdout）     done    REQ-P2-03；依赖 P2-02 分类 checkpoint
 ```
 
 ---

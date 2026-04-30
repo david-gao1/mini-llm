@@ -429,12 +429,12 @@ generate(model, idx, max_new_tokens, context_size, *, temperature=1.0, top_k=Non
 
 ---
 
-## P2-02 · `m06_classify_finetune`（SMS Spam 分类微调）
+## P2-02 · `m06_classify_finetune`（SMS ham/spam 微调 → 分类 checkpoint）
 
 **源码** `src/mini_llm/m06_classify_finetune/__init__.py`  
 **微调脚本** `finetune_classify.py`  
 **REQ 文档** [`docs/REQ-P2-02_ClassifyFinetune.md`](docs/REQ-P2-02_ClassifyFinetune.md)  
-**推理（CLI）** 见 **P2-03** · [`docs/REQ-P2-03_ClassifySmsInfer.md`](docs/REQ-P2-03_ClassifySmsInfer.md)
+**单条短信判别（CLI）** 见 **P2-03** · [`docs/REQ-P2-03_ClassifySmsInfer.md`](docs/REQ-P2-03_ClassifySmsInfer.md)（`classify_sms`：stdout `ham`|`spam`）
 
 ### 公开 API（训练 / 评估）
 
@@ -489,7 +489,7 @@ calc_accuracy_loader(loader, model, device, num_batches=None) -> float
 
 ---
 
-## P2-03 · `classify_sms.py`（SMS 分类推理）
+## P2-03 · `classify_sms.py`（单行英文短信 → `ham` / `spam`）
 
 **脚本** [`classify_sms.py`](classify_sms.py)  
 **REQ 文档** [`docs/REQ-P2-03_ClassifySmsInfer.md`](docs/REQ-P2-03_ClassifySmsInfer.md)

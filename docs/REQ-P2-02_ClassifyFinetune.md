@@ -9,16 +9,24 @@
 
 ---
 
-## 1. 业务逻辑（为什么做）
+## 1. 业务逻辑（读完就知道「要干嘛」）
 
-> **一句话**：在已经训好的 **英文 GPT（只会下一词预测）** 上接一个 **ham/spam 二分类头**，用带标签的短信 CSV 再训一小段时间，落盘 **`checkpoint_best.pt`**（含分类权重、`spam_max_length` 等元数据）；下游 **[REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md)** 的 `classify_sms` 读的就是这份 checkpoint。
+### 先打个比方
+
+你手头有一个「读英文维基很厉害」的 GPT，但它不知道什么叫垃圾短信。**分类微调**就像保留大块阅读能力，只在讲台顶上 **换一道二选一考题**：题干是一段短信，选项只有 **正常(ham)** 或 **垃圾(spam)**，用带标签的数据练几天。
+
+### 最关键的一句话
+
+> 在已经训好的 **英文 GPT（只会下一词预测）** 上接一个 **ham/spam 二分类头**，用带标签的短信 CSV 再训一小段时间，落盘 **`checkpoint_best.pt`**（含分类权重、`spam_max_length` 等）；下游 **[REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md)** 的 `classify_sms` 读的就是这份文件。
 
 **业务上要解决的问题**：区分 **正常短信（ham）** 与 **垃圾短信（spam）**。  
-**本 REQ 的边界**：负责 **训练侧**——数据准备、`finetune_classify.py` 训练循环、保存 checkpoint、（主线已含）test 集混淆矩阵 / spam PRF1 / FN CSV；**不负责**单条 stdin 演示 CLI（见 P2-03），也不包含 REQ §10 里标注为 backlog 的可选科研对照（除非单独拎出来做完）。
+**本 REQ 的边界**：负责 **训练侧**——数据、`finetune_classify.py`、checkpoint、（主线已含）test 混淆矩阵 / spam PRF1 / FN CSV；**不负责**单条演示 CLI（P2-03）；REQ **§10 backlog** 里的可选对照 **不算本条交付**。
+
+### 再往下看（为什么预训练还能接分类、书里怎么说）
 
 ### 起点：预训练在本仓库里指什么、为何还能接着做分类
 
-以下沿用仓库原有表述；若你只关心「这条 REQ 交付什么」，读完上文 **一句话** 即可跳到 §2。
+以下沿用仓库原有表述；若你只关心「这条 REQ 交付什么」，读完上文 **最关键的一句话** 即可跳到 §2。
 
 预训练在本仓库中的具体产出是 **GPT-2 Small 架构 + WikiText-103** 的一次完整跑（约 163M 参数，详见 [`RUN_REPORT_gpt2_small_wikitext103.md`](RUN_REPORT_gpt2_small_wikitext103.md)）；SPEC 中的 **P1-07** 仍对应「大规模预训练」主线；本 REQ 微调时 **默认加载**该 Small 跑的 `checkpoint_best.pt`（或其它兼容预训练权重）。
 

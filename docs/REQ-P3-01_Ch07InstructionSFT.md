@@ -145,3 +145,4 @@ instruction-data.json（很多条「指令+回答」）
 |------|------|
 | 2026-04-30 | 初稿：参考书数据/脚本、仅 SFT、Small/Medium 双轨；DPO → §9。 |
 | 2026-04-30 | 全文改写成更易读的表述（比方、表格白话、术语后置）。 |
+| 2026-04-30 | 列为全队 REQ §1 书写范例（见 [`product-design.md`](process/product-design.md) §5）。 |

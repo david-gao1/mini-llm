@@ -15,6 +15,8 @@
 
 ## REQ 需求文档
 
+**写法约定**：§1 统一采用「先打个比方 → 最关键的一句话 → （按需）再往下看」，范例 [**REQ-P3-01**](REQ-P3-01_Ch07InstructionSFT.md)；总则见 [process/product-design.md](process/product-design.md) **§5**。
+
 | 文档 | REQ | 状态 |
 |------|-----|------|
 | [REQ-P1-01_Tokenizer.md](REQ-P1-01_Tokenizer.md) | P1-01 GPT-2 BPE 分词器 | ✅ 已完成 |

@@ -3,8 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part III · 指令微调（第 7 章）  
 **依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（`GPTModel`）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）；**轨道 B** 还要等 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)（Medium 大模型训完可用）  
 **被依赖**：暂无（以后可加「输入一句指令、打印回答」的独立 REQ）  
-**状态**：todo（这篇先把范围和验收说清楚；代码还没写）  
-**原书代码在哪**：和本仓库 **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/)，最关键对照脚本 [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py)；章节索引见 [`REFERENCE.md`](../REFERENCE.md)。
+**状态**：✅ **轨道 A 已实现**（`m07` + `finetune_instruction.py` + 单测）；**轨道 B** 依赖 [REQ-P1-07](REQ-P1-07_GPT2Medium.md) Medium checkpoint；DPO → §9 backlog  
+**原书对照**：和本仓库 **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/) · [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py) · [`REFERENCE.md`](../REFERENCE.md)
 
 ---
 
@@ -145,4 +145,4 @@ instruction-data.json（很多条「指令+回答」）
 |------|------|
 | 2026-04-30 | 初稿：参考书数据/脚本、仅 SFT、Small/Medium 双轨；DPO → §9。 |
 | 2026-04-30 | 全文改写成更易读的表述（比方、表格白话、术语后置）。 |
-| 2026-04-30 | 列为全队 REQ §1 书写范例（见 [`product-design.md`](process/product-design.md) §5）。 |
+| 2026-05-01 | **执行**：`mini_llm.m07_instruction_finetune`、`finetune_instruction.py`、`configs/config_instruction_{small,medium}.json`、`tests/test_instruction_finetune.py`；SPEC/HARNESS/README 同步。 |

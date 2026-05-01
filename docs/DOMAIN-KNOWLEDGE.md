@@ -57,6 +57,7 @@
 | **m05_generate** | 对已加载模型做自回归采样 | 反复 `forward`，每步用末尾位置 logits 采样下一个 token |
 | **train.py** | 组装 config、数据、模型、优化器；训练与 checkpoint | 调度 `calc_loss_batch`、`evaluate_model` 等，不写底层算子 |
 | **m06_classify_finetune** | SMS Spam 数据下载/平衡/Dataset + 分类 loss/accuracy + **扩展评估** | `SpamDataset`；`calc_accuracy_loader`；**`collect_predictions_loader` / `confusion_counts_binary_spam` / `prf1_from_counts` / `export_false_negative_spam_csv`** |
+| **m07_instruction_finetune** | 第 7 章指令 JSON、`format_input`、pad collate、`ignore_index` mask | `InstructionDataset`；`instruction_collate_fn`；`download_instruction_json`；[`finetune_instruction.py`](../finetune_instruction.py) |
 | **finetune_classify.py** | 加载预训练 checkpoint → 冻结 + 换 head → 分类微调训练 | 编排 m04 + m06；末段 **reload best val** → test 混淆矩阵、PRF、**FN CSV** |
 | **eval_classify.py** | 已有分类 checkpoint → **不重训**复评 test | 读 `finetune_config.data.data_dir/test.csv`；打印指标；默认写出 **eval_false_negative_spam.csv** |
 | **generate_from_checkpoint.py** | 加载 checkpoint，只做推理 | 仅路径 + 生成参数；不应混入训练专用逻辑 |
@@ -69,7 +70,7 @@
 - **m04_model**：这是**可学习的预测器本体**。**作用**是在给定一段上下文 token 后，为**每一个位置**给出「下一个 token」在词表上的分数（logits）；预训练的交叉熵损失、生成时的采样，都建立在这个 **`forward`** 之上。
 - **m05_generate**：训练阶段关心的是「整段序列上的监督信号」；生成阶段关心的是「从已有前缀**一步一步**长出后面的 token」。**作用**是封装自回归循环（截断到 `context_length`、取最后一步 logits、按策略采样），避免在多个脚本里复制同一套循环逻辑。
 - **train.py**：超参、优化器、调度器、eval、early stop、checkpoint、心跳日志等都和「模型数学」无关但缺一不可。**作用**是**编排**：按 config 把 **m02、m04** 接起来，驱动梯度更新与持久化，使「可训练」成为一个完整命令。
-- **m06_classify_finetune**：微调需要与预训练不同的数据格式（CSV 分类标签）和评估方式（accuracy / **混淆矩阵** / **per-class F1** 而非 perplexity）。**作用**是封装数据集管道、`SpamDataset`、分类 loss、批量预测收集与 **TN/FP/FN/TP → PRF** 及 **FN 样本 CSV**；与预训练数据管道（m02）并行。
+- **m07_instruction_finetune**：指令微调（SFT）数据管线，对齐书本 `ch07/01_main-chapter-code/gpt_instruction_finetuning.py` 的拼文与 collate；训练入口为根目录 **`finetune_instruction.py`**（全模型 LM 头 CE，`ignore_index=-100`）。
 - **finetune_classify.py**：分类微调编排入口：训练结束后 **加载磁盘上的 best checkpoint**（与最后一 epoch 权重区分），再在 **test** 上打全局指标并导出漏判 spam，保证报告与 **交付物 checkpoint** 一致。
 - **eval_classify.py**：在无 GPU 训练复盘或调阈值调研时，对任意已保存的 `.pt` **重复 test 集评估**，不必重跑 epoch。
 - **generate_from_checkpoint.py**：推理不应加载整套训练数据。**作用**是从磁盘读取 **checkpoint** 里的权重与 config，重建 **`GPTModel`**，再交给 **m05** 输出文本；与训练入口分离，避免误把训练依赖带进演示或验收场景。
@@ -281,6 +282,7 @@ m04_model ← 依赖 m03（MultiHeadAttention）
 m05_generate ← 依赖 m04（model.forward）
       ↓
 m06_classify_finetune ← 依赖 m01（tiktoken）+ m04（GPTModel）
+m07_instruction_finetune ← 依赖 m01 + m04（SFT 全 LM 头）
       ↓
 train.py ← 编排预训练（m02 + m04）
 finetune_classify.py ← 编排微调（m04 + m06）
@@ -497,11 +499,14 @@ team-mini-llm/
 │   │   └── __init__.py          LayerNorm, GELU, FeedForward, TransformerBlock, GPTModel
 │   ├── m05_generate/            自回归生成
 │   │   └── __init__.py          generate_text_simple, generate
-│   └── m06_classify_finetune/   分类微调数据管道与评估
-│       └── __init__.py          SpamDataset；accuracy；混淆矩阵/PRF/FN 导出等
+│   ├── m06_classify_finetune/   分类微调数据管道与评估
+│   │   └── __init__.py          SpamDataset；accuracy；混淆矩阵/PRF/FN 导出等
+│   └── m07_instruction_finetune/   指令 SFT（Ch7）
+│       └── __init__.py          InstructionDataset；instruction_collate_fn；download_instruction_json
 │
 ├── train.py                     预训练入口（编排层）
 ├── finetune_classify.py         分类微调入口（末段 best→test 指标 + FN CSV）
+├── finetune_instruction.py      指令 SFT 入口（Ch7；写 runs/<run>/checkpoint_best.pt）
 ├── eval_classify.py             已有分类 checkpoint → test 混淆矩阵 / PRF / FN CSV
 ├── classify_sms.py              默认加载 **spam_classify_phase_b** checkpoint → 单行英文短信 → ham / spam
 ├── generate_from_checkpoint.py   加载 checkpoint 做文本生成（人工检验）
@@ -513,7 +518,7 @@ team-mini-llm/
 │   ├── test_model_forward.py
 │   ├── test_imports.py
 │   ├── test_classify_finetune.py  分类 Dataset / loss / encode（P2-02/P2-03）
-│   └── test_classify_metrics.py   混淆矩阵、PRF、FN CSV、探针 JSON（BL-P2-02-02）
+│   └── test_instruction_finetune.py   Ch7 指令 collate / Dataset（P3-01）
 │
 ├── runs/                        训练产出（gitignore）
 │   ├── team_gpt/                小模型实验
@@ -598,7 +603,7 @@ P1-07  GPT-2 Medium          wip     WikiText-103 raw 训练中
   ── GPT-2 Small            done    163M, WikiText-103, val_loss=3.3092
 P2-02  finetune_classify  预训练 GPT→SMS ham/spam `.pt`   done    REQ-P2-02；含 BL-P2-02-02 评估与 eval_classify（DOMAIN §6.6 / REQ §11）
 P2-03  classify_sms  单行短信→ham/spam（stdout）     done    REQ-P2-03；依赖 P2-02 分类 checkpoint
-P3-01  Ch7 指令 SFT（拟定）    todo    REQ-P3-01；参考书数据；仅 SFT；Small 短集 + Medium；DPO → REQ §9
+P3-01  Ch7 指令 SFT        wip→A done  REQ-P3-01；m07 + finetune_instruction；B 待 Medium ckpt
 ```
 
 ---

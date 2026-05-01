@@ -1,0 +1,27 @@
+{
+  "run_name": "instruction_sft_small",
+  "seed": 123,
+  "device": "auto",
+  "output_dir": "runs",
+  "pretrained_checkpoint": "runs/gpt2_small_wikitext103/checkpoint_best.pt",
+  "data": {
+    "url": "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch07/01_main-chapter-code/instruction-data.json",
+    "cache_path": "runs/instruction_sft_small/data_cache/instruction-data.json",
+    "train_ratio": 0.85,
+    "test_ratio": 0.1
+  },
+  "instruction_finetune": {
+    "batch_size": 2,
+    "num_epochs": 1,
+    "learning_rate": 5e-5,
+    "weight_decay": 0.1,
+    "allowed_max_length": 512,
+    "eval_freq": 2,
+    "eval_iter": 3,
+    "grad_clip": 1.0,
+    "drop_last_train": true,
+    "smoke_trim": 24,
+    "pad_token_id": 50256,
+    "ignore_index": -100
+  }
+}

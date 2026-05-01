@@ -60,6 +60,12 @@ uv run python eval_classify.py
 
 对照结论与健康阈值见 [`docs/REPORT_ClassifySpamProbe.md`](docs/REPORT_ClassifySpamProbe.md)、验收手册 [`docs/OWNER_CHECKLIST.md`](docs/OWNER_CHECKLIST.md)。
 
+**指令微调（第 7 章 SFT）**：[`finetune_instruction.py`](finetune_instruction.py) + [`configs/config_instruction_small.json`](configs/config_instruction_small.json)（默认 `smoke_trim` 缩短样本；须先有 `runs/gpt2_small_wikitext103/checkpoint_best.pt`）。全量 + Medium 见 [`configs/config_instruction_medium.json`](configs/config_instruction_medium.json)（依赖 [REQ-P1-07](docs/REQ-P1-07_GPT2Medium.md)）。说明见 [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md)。
+
+```bash
+uv run python finetune_instruction.py --config configs/config_instruction_small.json
+```
+
 长任务（如 WikiText-103）建议使用项目虚拟环境绝对路径 + 无缓冲日志，避免 `uv` 在不同终端上下文里切到上级目录导致找不到 `train.py`，以及日志长时间不刷新：
 
 ```bash
@@ -91,6 +97,8 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 | `m03_attention/` | 03 | 第 3 章 |
 | `m04_model/` | 04 | 第 4 章 |
 | `m05_generate/` | 05 | 生成（第 4 章生成 + 第 6/7 章衔接） |
+| `m06_classify_finetune/` | 06 | 第 6 章 · SMS 分类微调 |
+| `m07_instruction_finetune/` | 07 | 第 7 章 · 指令 SFT 数据与 collate |
 
 第 5 章预训练在根目录 [`train.py`](train.py)（接在 `m04_model` 之后；`m05_generate` 可与训练并行开发，推理依赖 checkpoint）。
 
@@ -130,9 +138,10 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 | 路径 | 说明 |
 |------|------|
 | [`configs/config.json`](configs/config.json) | 超参与数据相关配置 |
-| [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m06_classify_finetune/` |
+| [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m07_instruction_finetune/` |
 | [`train.py`](train.py) | 训练入口（预训练循环、损失、评估） |
 | [`finetune_classify.py`](finetune_classify.py) | SMS Spam 分类微调（第六章对齐） |
+| [`finetune_instruction.py`](finetune_instruction.py) | 指令 SFT（第七章对齐；[`configs/config_instruction_small.json`](configs/config_instruction_small.json)） |
 | [`classify_sms.py`](classify_sms.py) | 加载微调后的权重（**默认** `runs/spam_classify_phase_b/checkpoint_best.pt`），单行英文短信 → `ham` / `spam` |
 | [`generate_from_checkpoint.py`](generate_from_checkpoint.py) | 加载 `checkpoint_*.pt` 做文本生成（检验效果） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |

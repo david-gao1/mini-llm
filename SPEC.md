@@ -39,7 +39,7 @@ REQ 文档的人话与 §1 优先级见 [`docs/process/product-design.md`](docs/
 | `m05_generate` | P2-01 | done | done | — |
 | `m06_classify_finetune` | P2-02 | done | done | — |
 | `classify_sms.py` | P2-03 | done | done | — |
-| `m07_instruction_finetune`（拟定） | P3-01 | todo | todo | 轨道 B：须先有 Medium checkpoint（P1-07） |
+| `m07_instruction_finetune` | P3-01 | done | done | 轨道 B：须先有 Medium checkpoint（P1-07） |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
 
@@ -549,20 +549,38 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 
 ## Part III（第 7 章 · 指令微调 SFT）
 
-## P3-01 · `m07_instruction_finetune`（拟定）— Ch7 指令 SFT（双轨 Small / Medium）
+## P3-01 · `m07_instruction_finetune` — Ch7 指令 SFT（双轨 Small / Medium）
 
-**源码（拟定）** `src/mini_llm/m07_instruction_finetune/__init__.py`  
-**脚本（拟定）** `finetune_instruction.py`  
+**源码** `src/mini_llm/m07_instruction_finetune/__init__.py`  
+**脚本** [`finetune_instruction.py`](../finetune_instruction.py)  
+**配置** [`configs/config_instruction_small.json`](../configs/config_instruction_small.json)（Small + `smoke_trim`）、[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json)（全量数据；依赖 Medium checkpoint）  
 **REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md)
 
-### 公开 API（拟定）
+### 公开 API
 
-实现后补齐：指令 `Dataset`、`format_input`、`collate`（`ignore_index`）、可选数据下载；与书本 `ch07/01_main-chapter-code/gpt_instruction_finetuning.py` 逻辑对齐。
+```python
+format_input(entry: dict) -> str
+split_instruction_entries(data, *, train_ratio=0.85, test_ratio=0.1) -> tuple[list, list, list]
+download_instruction_json(cache_path: Path, url: str) -> list[dict]
+
+class InstructionDataset(Dataset):
+    def __init__(self, data, encode_fn: Callable[[str], list[int]]) -> None
+
+instruction_collate_fn(batch, *, pad_token_id=50256, ignore_index=-100,
+    allowed_max_length=None, device=None) -> tuple[Tensor, Tensor]
+make_instruction_collate_fn(...) -> Callable  # DataLoader collate_fn
+```
 
 ### 实现状态
 
-`todo` — **参考书数据与脚本**；仅 **SFT**；**轨道 A**：GPT-2 Small + 很短指令集；**轨道 B**：GPT-2 Medium（≈355M，[`REQ-P1-07`](docs/REQ-P1-07_GPT2Medium.md)）为起点。**DPO / 偏好** 见 REQ-P3-01 **§9 backlog**，不纳入本条验收。
+`done`（**轨道 A**：Small + 书本 JSON + `finetune_instruction.py`；**轨道 B**：配置已备，仍依赖 **P1-07** Medium checkpoint）。**DPO** 见 REQ-P3-01 §9。
+
+### 测试覆盖
+
+| 测试文件 | 用例 | 状态 |
+|----------|------|------|
+| `tests/test_instruction_finetune.py` | `format_input`、划分、`collate` 形状与截断、`InstructionDataset`、本地 JSON | done |
 
 ### 阻塞项
 
-- **轨道 B**：依赖 **P1-07** 产出可用 Medium 预训练 checkpoint。
+- **轨道 B**：依赖 **P1-07** 产出可用 Medium 预训练 checkpoint（[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json) 内路径须存在）。

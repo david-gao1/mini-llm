@@ -56,6 +56,6 @@
 
 | REQ-ID | 交付 | 契约要点 | Harness | 通过判据 |
 |--------|------|----------|---------|----------|
-| P3-01 | `m07_instruction_finetune`（拟定）+ `finetune_instruction.py` | 对齐书本 `instruction-data.json` + `format_input` / collate（pad→`ignore_index`）；**LM 头** next-token loss；写出 checkpoint | L0：`pytest tests/test_instruction_finetune.py`（拟定）；L3：`finetune_instruction.py --config configs/config_instruction_small.json`（拟定） | loss 有限；checkpoint 落盘；固定指令定性更像「回答」 |
+| P3-01 | `m07_instruction_finetune` + `finetune_instruction.py` | 对齐书本 `instruction-data.json`；`format_input` / collate（pad→`ignore_index`）；**LM 头** CE(`ignore_index=-100`)；写出 `runs/<run_name>/checkpoint_best.pt`（含 `instruction_meta`） | L0：`pytest tests/test_instruction_finetune.py`；L3：`uv run python finetune_instruction.py --config configs/config_instruction_small.json`（须先有 Small 预训练 `.pt`；默认 `smoke_trim` 缩短数据） | loss 有限；`checkpoint_best.pt` 落盘 |
 
 **Backlog**：**DPO / 偏好微调** → [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) §9（不阻塞 P3-01 SFT）。

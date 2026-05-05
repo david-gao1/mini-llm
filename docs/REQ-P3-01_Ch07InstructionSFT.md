@@ -36,11 +36,12 @@
 
 | 约定 | 白话 |
 |------|------|
-| **跟书走** | 数据从哪下、JSON 长什么样、中英文模板怎么拼、训练集/验证集怎么切、一批数据长短不齐怎么垫齐——这些 **优先跟书上脚本一步一步对齐**，方便你对照「书上的数 vs 我们的数」。实现时用的是 **本仓库自己的** `GPTModel` 和 tokenizer，不直接把书里私有封装复制进来糊成一团。 |
+| **跟书走** | 数据模板、划分、collate、loss 等与 **`gpt_instruction_finetuning.py`** **`main()`** 对齐；**细则（四段流水线 + 刻意差异）** 见子文档 [**REQ-P3-01SUB**](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)。实现上使用 **`GPTModel` + `encode_text`**，不复制书里 `previous_chapters`。 |
 | **只做 SFT** | 只有「标准答案抄写作业」这一种训练；**不做** DPO、奖励模型、强化学习那一套。 |
 | **两条跑道** | **跑道 A**：用小模型（GPT-2 **Small**）+ **很少几条**指令数据，先把整条链路跑通（类似书里快速测试模式）。**跑道 B**：用大一点的 **GPT-2 Medium**（体量大约 **3 亿多参数**，和 [`REQ-P1-07`](REQ-P1-07_GPT2Medium.md) / `config_medium.json` 那条线一致），用 **完整（或接近完整）** 的指令数据认真训；**前提是大模型的预训练 checkpoint 已经有了**。 |
 
-两条跑道用的是 **同一套代码和数据管线**，只是 **换起点权重**、**换数据多少**、**换训练多久**。
+两条跑道用的是 **同一套代码和数据管线**，只是 **换起点权重**、**换数据多少**、**换训练多久**。  
+**书上每一步 ↔ 仓库符号**：见 [**REQ-P3-01SUB · 「跟书走」对齐细则**](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)。
 
 ---
 
@@ -145,4 +146,4 @@ instruction-data.json（很多条「指令+回答」）
 |------|------|
 | 2026-04-30 | 初稿：参考书数据/脚本、仅 SFT、Small/Medium 双轨；DPO → §9。 |
 | 2026-04-30 | 全文改写成更易读的表述（比方、表格白话、术语后置）。 |
-| 2026-05-01 | **执行**：`mini_llm.m07_instruction_finetune`、`finetune_instruction.py`、`configs/config_instruction_{small,medium}.json`、`tests/test_instruction_finetune.py`；SPEC/HARNESS/README 同步。 |
+| 2026-05-01 | 「跟书走」长对照表迁出至 [**REQ-P3-01SUB**](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)；§1 仅保留链接。 |

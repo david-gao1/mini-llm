@@ -24,6 +24,7 @@ from torch.utils.data import DataLoader
 
 _ROOT = Path(__file__).resolve().parent
 _SRC = _ROOT / "src"
+# 脚本在仓库根目录，包在 src/mini_llm；直接 python 运行时需要把 src 放进 path。
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
@@ -61,6 +62,7 @@ def calc_loss_batch_instruction(
     device: torch.device,
     ignore_index: int,
 ) -> torch.Tensor:
+    # 与预训练相同：每个位置预测「下一个 token」。targets 里 pad 位已标成 ignore_index，不参与 loss。
     input_batch = input_batch.to(device)
     target_batch = target_batch.to(device)
     logits = model(input_batch)
@@ -78,6 +80,7 @@ def calc_loss_loader_instruction(
     num_batches: int | None,
     ignore_index: int,
 ) -> float:
+    # 估 loss 用：num_batches 非空时只扫前若干个 batch，加快中途打印；完整 epoch 摘要仍用同一套评估逻辑。
     total = 0.0
     n = len(data_loader)
     if n == 0:
@@ -96,6 +99,7 @@ def calc_loss_loader_instruction(
 
 
 def main() -> int:
+    # --- 参数与配置 ---
     parser = argparse.ArgumentParser(description="Instruction finetuning (SFT) for GPTModel")
     parser.add_argument("--config", type=Path, default=_ROOT / "configs" / "config_instruction_small.json")
     parser.add_argument("--checkpoint", type=Path, default=None, help="Override pretrained_checkpoint in config")
@@ -123,16 +127,19 @@ def main() -> int:
     data_cfg = cfg["data"]
     i_cfg = cfg["instruction_finetune"]
 
+    # --- 数据：JSON → 划分 →（可选）截断；详见 m07 format_input / InstructionDataset ---
     cache_path = _ROOT / Path(data_cfg["cache_path"])
     url = str(data_cfg["url"])
     entries = download_instruction_json(cache_path, url)
 
     train_ratio = float(data_cfg.get("train_ratio", 0.85))
     test_ratio = float(data_cfg.get("test_ratio", 0.1))
+    # 时间顺序是 [train | 书中 10% test 中段 | val 尾段]，但返回为 (train, val, test)：第二个是尾段、第三个是中段。
     train_data, val_data, test_data = split_instruction_entries(
         entries, train_ratio=train_ratio, test_ratio=test_ratio
     )
 
+    # 各划分只保留前 k 条，便于冒烟；正式训设 null。
     smoke_trim = i_cfg.get("smoke_trim")
     if smoke_trim is not None:
         k = int(smoke_trim)
@@ -142,6 +149,7 @@ def main() -> int:
 
     print(f"Dataset sizes: train={len(train_data)}, val={len(val_data)}, test={len(test_data)}")
 
+    # --- 设备、collate（pad + ignore_index）、Dataset、DataLoader（train shuffle / val 否）---
     device = _pick_device(str(cfg.get("device", "auto")))
     print(f"Device: {device}")
 
@@ -152,6 +160,7 @@ def main() -> int:
     pad_token_id = int(i_cfg.get("pad_token_id", PAD_TOKEN_ID_DEFAULT))
     ignore_index = int(i_cfg.get("ignore_index", IGNORE_INDEX_DEFAULT))
 
+    # Dataset 产出变长 token 列表；collate 负责 pad + 构造错位一位的 targets（见 m07）。
     collate = make_instruction_collate_fn(
         pad_token_id=pad_token_id,
         ignore_index=ignore_index,
@@ -187,6 +196,7 @@ def main() -> int:
         print("Train DataLoader is empty (increase smoke_trim or batch_size?).", file=sys.stderr)
         return 1
 
+    # --- 预训练权重：结构来自 ckpt["config"]，权重进 GPTModel；allowed_max_length 不得超过 context ---
     ckpt_path = args.checkpoint or (_ROOT / cfg["pretrained_checkpoint"])
     if not ckpt_path.is_file():
         print(f"Checkpoint not found: {ckpt_path}", file=sys.stderr)
@@ -200,6 +210,7 @@ def main() -> int:
 
     model_cfg = ckpt["config"]["model"]
     ctx = int(model_cfg["context_length"])
+    # 序列长度不能超过模型 context；收紧后要重做 collate 与 Loader，否则仍按旧截断。
     if allowed_max_length is not None and allowed_max_length > ctx:
         print(
             f"allowed_max_length ({allowed_max_length}) > model context_length ({ctx}); clamping.",
@@ -229,10 +240,12 @@ def main() -> int:
             num_workers=0,
         )
 
+    # --- 按 ckpt 构建 GPTModel 并载入预训练权重（全词表 LM 头，非分类头）---
     model = GPTModel(model_cfg)
     model.load_state_dict(ckpt["model_state_dict"])
     print(f"Loaded pretrained weights (best_val_loss={ckpt.get('best_val_loss', 'n/a')})")
 
+    # 全量微调（非第六章那种只换分类头）；与书 main 里对部分参数解冻的策略不同，见 REQ-P3-01SUB。
     for p in model.parameters():
         p.requires_grad = True
 
@@ -240,6 +253,7 @@ def main() -> int:
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters (full finetune): {n_params:,} ({n_params / 1e6:.1f}M)")
 
+    # --- 优化器、训练轮数、eval 频率；runs/<run_name>/checkpoint_best.pt ---
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=float(i_cfg["learning_rate"]),
@@ -256,6 +270,7 @@ def main() -> int:
     out_root.mkdir(parents=True, exist_ok=True)
     best_path = out_root / "checkpoint_best.pt"
 
+    # 写入 checkpoint，推理/复现时知道 pad 与模板版本，避免和训练假设不一致。
     instruction_meta = {
         "allowed_max_length": allowed_max_length,
         "pad_token_id": pad_token_id,
@@ -266,7 +281,7 @@ def main() -> int:
     }
 
     best_val_loss = float("inf")
-    global_step = -1
+    global_step = -1  # 先 -1，进入第一个 batch 后为 0，便于按「第几步」做 eval_freq
     t_start = time.time()
 
     print(f"\n{'='*60}")
@@ -276,6 +291,7 @@ def main() -> int:
     )
     print(f"{'='*60}\n")
 
+    # --- 训练：每步 CE loss；每 eval_freq 步抽样算 train/val loss，val 改善则写入 best ---
     model.train()
     for epoch in range(num_epochs):
         for input_batch, target_batch in train_loader:
@@ -289,6 +305,7 @@ def main() -> int:
             optimizer.step()
             global_step += 1
 
+            # 每隔 eval_freq 步在 train/val 上各算 eval_iter 个 batch 的平均 loss（非整集，仅监测趋势）。
             if global_step % eval_freq == 0:
                 tr = calc_loss_loader_instruction(
                     train_loader, model, device, eval_iter, ignore_index
@@ -302,6 +319,7 @@ def main() -> int:
                     f"train_loss={tr:.4f} val_loss={va:.4f}"
                 )
 
+                # va != va 检测 NaN；无效 loss 不写 best。
                 if va < best_val_loss and not (va != va):  # not nan
                     best_val_loss = va
                     torch.save(
@@ -325,8 +343,10 @@ def main() -> int:
         ep_va = calc_loss_loader_instruction(val_loader, model, device, eval_iter, ignore_index)
         print(f"  End epoch {epoch + 1}: train_loss={ep_tr:.4f} val_loss={ep_va:.4f}")
 
+    # --- 收尾：若从未因 val 存过盘，则把最后一轮权重写入 checkpoint_best.pt ---
     total_time = time.time() - t_start
     print(f"\nTraining finished in {_fmt_duration(total_time)}.")
+    # 若 eval 从未触发存盘（例如 eval_freq 很大且步数少），至少落盘最后一版权重。
     if best_path.is_file():
         print(f"Best checkpoint -> {best_path} (best_val_loss={best_val_loss:.4f})")
     else:

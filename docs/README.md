@@ -28,6 +28,7 @@
 | [REQ-P1-07_GPT2Medium.md](REQ-P1-07_GPT2Medium.md) | P1-07 GPT-2 Medium + WikiText-2 | todo |
 | [REQ-P2-02_ClassifyFinetune.md](REQ-P2-02_ClassifyFinetune.md) | P2-02 finetune_classify：预训练 GPT → SMS ham/spam checkpoint（供 P2-03） | ✅ 已完成；§10 为可选增强 backlog |
 | [REQ-P3-01_Ch07InstructionSFT.md](REQ-P3-01_Ch07InstructionSFT.md) | P3-01 Ch7 指令 SFT：参考书数据；Small 已实现 / Medium 待 checkpoint | ✅ 轨道 A；轨道 B 依赖 P1-07 |
+| [REQ-P3-01SUB_Ch07InstructionBookAlignment.md](REQ-P3-01SUB_Ch07InstructionBookAlignment.md) | **P3-01 子**：`gpt_instruction_finetuning.py` ↔ 仓库（四段流水线 + 刻意差异） | 细则文档 |
 
 | 文档 | 说明 |
 |------|------|

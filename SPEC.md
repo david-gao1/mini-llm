@@ -554,7 +554,7 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 **源码** `src/mini_llm/m07_instruction_finetune/__init__.py`  
 **脚本** [`finetune_instruction.py`](../finetune_instruction.py)  
 **配置** [`configs/config_instruction_small.json`](../configs/config_instruction_small.json)（Small + `smoke_trim`）、[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json)（全量数据；依赖 Medium checkpoint）  
-**REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md)
+**REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) · **书本对齐细则** [`docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md`](docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md)
 
 ### 公开 API
 

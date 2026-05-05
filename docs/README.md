@@ -35,6 +35,7 @@
 | [DOMAIN-KNOWLEDGE.md](DOMAIN-KNOWLEDGE.md) | DDD 视角项目知识、踩坑汇总（含 checkpoint 生成：**中英文 prompt**、`temperature=0` 贪心易重复、**shell 续行 `\`**） |
 | [../.cursor/skills/team-mini-llm-domain/SKILL.md](../.cursor/skills/team-mini-llm-domain/SKILL.md) | Cursor Agent Skill：将边界与约定压缩为可执行清单（与 DOMAIN-KNOWLEDGE 对齐） |
 | [RUN_REPORT_gpt2_small_wikitext103.md](RUN_REPORT_gpt2_small_wikitext103.md) | GPT-2 Small × WikiText-103 运行报告；**第七节**为加载 checkpoint 与生成参数说明 |
+| [RUN_REPORT_instruction_sft_small.md](RUN_REPORT_instruction_sft_small.md) | 指令微调冒烟配置 `instruction_sft_small`（MPS、smoke_trim=24）一次运行记录与读数说明 |
 | [TRAINING_LOG.md](TRAINING_LOG.md) | 训练配置切换与时间线记录 |
 
 ## 模块设计文档

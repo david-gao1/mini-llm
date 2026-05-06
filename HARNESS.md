@@ -1,5 +1,7 @@
 # Harness 工程
 
+**行为契约（OpenSpec）**与命令判据对照：[`openspec/README.md`](openspec/README.md) · [`specs/pretraining/spec.md`](openspec/specs/pretraining/spec.md) 等。
+
 总闸门 **M1 / M2** 见根目录 [`README.md`](README.md)。本文说明如何按 **Harness** 拆解交付物；**之后新增需求请按「需求模板」写**，避免只有功能描述没有验收手段。
 
 ## 思想

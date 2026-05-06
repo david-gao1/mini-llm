@@ -15,7 +15,7 @@
 | **SPEC（本文件）** | [`SPEC.md`](SPEC.md) | **API 签名、张量形状、配置字段、实现状态、测试表** |
 | **需求故事** | [`docs/REQ-*.md`](docs/README.md) | **为何做、业务比方、边界与 backlog** |
 
-当前已落地的首个能力规格：**[指令 SFT · `instruction-sft`](openspec/specs/instruction-sft/spec.md)**。  
+当前 **`openspec/specs/`** 能力规格：**[pretraining](openspec/specs/pretraining/spec.md)** · **[generation](openspec/specs/generation/spec.md)** · **[classify-sms](openspec/specs/classify-sms/spec.md)** · **[instruction-sft](openspec/specs/instruction-sft/spec.md)**（详见 [`openspec/README.md`](openspec/README.md)）。  
 引入或修改 **用户/集成方可见行为** 时，优先更新对应 `openspec/specs/**/spec.md`，再同步本文件与 [`HARNESS.md`](HARNESS.md)。
 
 总说明见 [`openspec/README.md`](openspec/README.md)。

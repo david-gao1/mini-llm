@@ -11,7 +11,7 @@
 | **REQ** | 下表与 `REQ-*.md` | **业务动机、边界、分阶段交付与 backlog** |
 | **HARNESS** | [`HARNESS.md`](../HARNESS.md) | **可执行命令与通过判据** |
 
-引读：[`openspec/README.md`](../openspec/README.md) · 首个能力规格：[**instruction-sft**](../openspec/specs/instruction-sft/spec.md)。
+引读：[`openspec/README.md`](../openspec/README.md) · 行为规格：[pretraining](../openspec/specs/pretraining/spec.md) · [generation](../openspec/specs/generation/spec.md) · [classify-sms](../openspec/specs/classify-sms/spec.md) · [instruction-sft](../openspec/specs/instruction-sft/spec.md)。
 
 ---
 

@@ -8,3 +8,12 @@
 | `changes/` | （预留）进行中变更：proposal / design / tasks / delta specs |
 
 新增或修改**可观察行为**时：先改/补对应 `specs/**/spec.md` 中的 Requirement 与 Scenario，再同步 [`HARNESS.md`](../HARNESS.md) 判据与 SPEC 中的 API 表。
+
+## 能力目录（`specs/`）
+
+| 目录 | Harness / REQ | 说明 |
+|------|----------------|------|
+| [`pretraining/spec.md`](specs/pretraining/spec.md) | Part I · P1-01 … P1-05、M1 | 分词 → DataLoader → 注意力 → GPT → `train.py` 与 checkpoint |
+| [`generation/spec.md`](specs/generation/spec.md) | P2-01、M2 | 自回归续写与 checkpoint 消费 |
+| [`classify-sms/spec.md`](specs/classify-sms/spec.md) | P2-02、P2-03 | SMS ham/spam 微调与单条推理 CLI |
+| [`instruction-sft/spec.md`](specs/instruction-sft/spec.md) | Part III · P3-01、P3-02 Roadmap | 指令 JSON SFT 与后续质检 |

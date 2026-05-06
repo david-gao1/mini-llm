@@ -146,7 +146,7 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 | [`generate_from_checkpoint.py`](generate_from_checkpoint.py) | 加载 `checkpoint_*.pt` 做文本生成（检验效果） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |
 | [`HARNESS.md`](HARNESS.md) | Harness 工程：分层、Part I/II REQ、需求模板 |
-| [`openspec/README.md`](openspec/README.md) | OpenSpec：行为规格目录（[`specs/instruction-sft/spec.md`](openspec/specs/instruction-sft/spec.md)） |
+| [`openspec/README.md`](openspec/README.md) | OpenSpec：[`specs/pretraining`](openspec/specs/pretraining/spec.md)、[`generation`](openspec/specs/generation/spec.md)、[`classify-sms`](openspec/specs/classify-sms/spec.md)、[`instruction-sft`](openspec/specs/instruction-sft/spec.md) |
 | [`docs/README.md`](docs/README.md) | 模块级设计文档索引（如 m01 分词器详设） |
 | [`.cursor/skills/team-mini-llm-domain/SKILL.md`](.cursor/skills/team-mini-llm-domain/SKILL.md) | Cursor Agent Skill：模块边界、术语、生成踩坑（与 DOMAIN-KNOWLEDGE 对齐） |
 

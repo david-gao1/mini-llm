@@ -2,9 +2,10 @@
 
 **所属**：[SPEC.md](../SPEC.md) → Part III · 指令微调（第 7 章）  
 **依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（`GPTModel`）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）；**轨道 B** 还要等 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)（Medium 大模型训完可用）  
-**被依赖**：暂无（以后可加「输入一句指令、打印回答」的独立 REQ）  
+**被依赖**：[REQ-P3-02](REQ-P3-02_InstructionSFTEvalAndQuality.md)（效果检验、训练监控与质量优化）  
 **状态**：✅ **轨道 A 已实现**（`m07` + `finetune_instruction.py` + 单测）；**轨道 B** 依赖 [REQ-P1-07](REQ-P1-07_GPT2Medium.md) Medium checkpoint；DPO → §9 backlog  
-**原书对照**：和本仓库 **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/) · [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py) · [`REFERENCE.md`](../REFERENCE.md)
+**原书对照**：和本仓库 **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/) · [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py) · [`REFERENCE.md`](../REFERENCE.md)  
+**OpenSpec（行为契约）**：[openspec/specs/instruction-sft/spec.md](../openspec/specs/instruction-sft/spec.md)
 
 ---
 
@@ -125,7 +126,9 @@ instruction-data.json（很多条「指令+回答」）
 
 ## 8. 文档索引（做完代码后要回来改的）
 
-[`SPEC.md`](../SPEC.md)、[`HARNESS.md`](../HARNESS.md)、[`docs/README.md`](README.md)、[`REFERENCE.md`](../REFERENCE.md)、[`README.md`](../README.md)。自学问题可写在 [`LEARNING_LOG.md`](LEARNING_LOG.md)。
+[`SPEC.md`](../SPEC.md)、[`HARNESS.md`](../HARNESS.md)、[`docs/README.md`](README.md)、[`REFERENCE.md`](../REFERENCE.md)、[`README.md`](../README.md)。自学问题可写在 [`LEARNING_LOG.md`](LEARNING_LOG.md)。  
+**OpenSpec（行为契约）**：[openspec/specs/instruction-sft/spec.md](../openspec/specs/instruction-sft/spec.md)。  
+**质检与优化闭环**（全 val、对照生成、checkpoint 策略等）：[**REQ-P3-02**](REQ-P3-02_InstructionSFTEvalAndQuality.md)。
 
 ---
 
@@ -146,4 +149,5 @@ instruction-data.json（很多条「指令+回答」）
 |------|------|
 | 2026-04-30 | 初稿：参考书数据/脚本、仅 SFT、Small/Medium 双轨；DPO → §9。 |
 | 2026-04-30 | 全文改写成更易读的表述（比方、表格白话、术语后置）。 |
-| 2026-05-01 | 「跟书走」长对照表迁出至 [**REQ-P3-01SUB**](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)；§1 仅保留链接。 |
+| 2026-05-05 | §8：链至 [**REQ-P3-02**](REQ-P3-02_InstructionSFTEvalAndQuality.md)；**被依赖**更新为 P3-02。 |
+| 2026-05-06 | 头部增加 **OpenSpec** 链至 [`openspec/specs/instruction-sft/spec.md`](../openspec/specs/instruction-sft/spec.md)。 |

@@ -57,5 +57,6 @@
 | REQ-ID | 交付 | 契约要点 | Harness | 通过判据 |
 |--------|------|----------|---------|----------|
 | P3-01 | `m07_instruction_finetune` + `finetune_instruction.py` | 对齐书本 `instruction-data.json`；`format_input` / collate（pad→`ignore_index`）；**LM 头** CE(`ignore_index=-100`)；写出 `runs/<run_name>/checkpoint_best.pt`（含 `instruction_meta`） | L0：`pytest tests/test_instruction_finetune.py`；L3：`uv run python finetune_instruction.py --config configs/config_instruction_small.json`（须先有 Small 预训练 `.pt`；默认 `smoke_trim` 缩短数据） | loss 有限；`checkpoint_best.pt` 落盘 |
+| P3-02 | （todo）全 val / epoch best / 对照生成 / 正式训练配方 | 见 [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md) | 现阶段：[`docs/OWNER_CHECKLIST.md`](docs/OWNER_CHECKLIST.md) **Part III** | 以 REQ §4 阶段 A/B/C 为准 |
 
-**Backlog**：**DPO / 偏好微调** → [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) §9（不阻塞 P3-01 SFT）。
+**Backlog**：**DPO / 偏好微调** → [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) §9（不阻塞 P3-01 SFT）。**指令质检与优化闭环** → [**REQ-P3-02**](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md)（不阻塞 P3-01 轨道 A）。

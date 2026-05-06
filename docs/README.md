@@ -2,6 +2,19 @@
 
 与根目录 [`README.md`](../README.md)、[`HARNESS.md`](../HARNESS.md)、[`PROCESS.md`](../PROCESS.md) 配合阅读。
 
+## 规范体系（SPEC · OpenSpec · REQ · HARNESS）
+
+| 类型 | 位置 | 用途 |
+|------|------|------|
+| **OpenSpec** | [`openspec/specs/`](../openspec/specs/) | 行为 **Purpose / Requirement / Scenario**（可与 AI 评审对齐验收口径） |
+| **SPEC** | [`SPEC.md`](../SPEC.md) | **API、形状、实现状态、测试覆盖** |
+| **REQ** | 下表与 `REQ-*.md` | **业务动机、边界、分阶段交付与 backlog** |
+| **HARNESS** | [`HARNESS.md`](../HARNESS.md) | **可执行命令与通过判据** |
+
+引读：[`openspec/README.md`](../openspec/README.md) · 首个能力规格：[**instruction-sft**](../openspec/specs/instruction-sft/spec.md)。
+
+---
+
 ## 流程规范
 
 一人全栈（产品 + 开发 + 测试）的闭环流程，总纲见 [`PROCESS.md`](../PROCESS.md)。
@@ -29,6 +42,7 @@
 | [REQ-P2-02_ClassifyFinetune.md](REQ-P2-02_ClassifyFinetune.md) | P2-02 finetune_classify：预训练 GPT → SMS ham/spam checkpoint（供 P2-03） | ✅ 已完成；§10 为可选增强 backlog |
 | [REQ-P3-01_Ch07InstructionSFT.md](REQ-P3-01_Ch07InstructionSFT.md) | P3-01 Ch7 指令 SFT：参考书数据；Small 已实现 / Medium 待 checkpoint | ✅ 轨道 A；轨道 B 依赖 P1-07 |
 | [REQ-P3-01SUB_Ch07InstructionBookAlignment.md](REQ-P3-01SUB_Ch07InstructionBookAlignment.md) | **P3-01 子**：`gpt_instruction_finetuning.py` ↔ 仓库（四段流水线 + 刻意差异） | 细则文档 |
+| [REQ-P3-02_InstructionSFTEvalAndQuality.md](REQ-P3-02_InstructionSFTEvalAndQuality.md) | P3-02 指令 SFT **质检**：问题记录、全 val/epoch best、对照生成、正式训练配方 | todo |
 
 | 文档 | 说明 |
 |------|------|

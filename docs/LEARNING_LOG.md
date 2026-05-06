@@ -132,3 +132,15 @@ TN / FP / FN / TP 还是分不清楚是什么意思。。。
 
 
 
+---
+
+## REQ-P3-02 · 指令 SFT 质检（思考题，仅问题）
+
+（对应 [REQ-P3-02](REQ-P3-02_InstructionSFTEvalAndQuality.md)；自己想，不写答案。）
+
+1. 若训练日志里 **`val_loss` 来自前 3 个 val batch 的平均**，你在一页 PPT 里汇报「SFT 验证困惑度」时，**至少**要补充哪一句限定语，才不算误导听众？
+2. **epoch 末**估的 loss 比 **中间某 step** 更好，但 checkpoint 只在 step 上更新——若你要改代码，你更倾向于 **epoch 末再 save 一次**，还是 **训完再单独跑 eval 选权重**？各有什么运维代价？
+3. 用 **`generate_from_checkpoint`** 对比预训练与 SFT 时，若不固定 **`max_new_tokens` / `temperature` / `top-k`**，对比结论可能被什么因素「掺假」？
+4. **反直觉**：指令微调后，在某个**事实问答** prompt 上仍胡编——这是否一定说明「SFT 没起作用」？你会设计什么**对照实验**来区分「数据太少」和「根本没学到模板」？
+5. **动手**：若把 `smoke_trim` 去掉、`num_epochs` 提到 3，你预期 **train wall time** 和 **val_loss 曲线形状** 各会有什么量级变化（不用算精确，说数量级直觉即可）？
+

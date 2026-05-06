@@ -5,6 +5,21 @@
 
 > 状态标记：`done` 已完成 · `wip` 进行中 · `todo` 未开始 · `blocked` 被阻塞
 
+## 与 OpenSpec 的关系
+
+本仓库采用 [OpenSpec](https://openspec.dev/) 的 **轻量目录约定**：
+
+| 层 | 路径 | 回答什么 |
+|----|------|----------|
+| **行为规格** | [`openspec/specs/`](openspec/specs/) | 对外可验收的 **Purpose / Requirement / Scenario**（RFC 2119 语气） |
+| **SPEC（本文件）** | [`SPEC.md`](SPEC.md) | **API 签名、张量形状、配置字段、实现状态、测试表** |
+| **需求故事** | [`docs/REQ-*.md`](docs/README.md) | **为何做、业务比方、边界与 backlog** |
+
+当前已落地的首个能力规格：**[指令 SFT · `instruction-sft`](openspec/specs/instruction-sft/spec.md)**。  
+引入或修改 **用户/集成方可见行为** 时，优先更新对应 `openspec/specs/**/spec.md`，再同步本文件与 [`HARNESS.md`](HARNESS.md)。
+
+总说明见 [`openspec/README.md`](openspec/README.md)。
+
 ---
 
 ## SPEC 书写约定
@@ -40,6 +55,7 @@ REQ 文档的人话与 §1 优先级见 [`docs/process/product-design.md`](docs/
 | `m06_classify_finetune` | P2-02 | done | done | — |
 | `classify_sms.py` | P2-03 | done | done | — |
 | `m07_instruction_finetune` | P3-01 | done | done | 轨道 B：须先有 Medium checkpoint（P1-07） |
+| 指令 SFT 质检 / 监控 / 对照脚本 | P3-02 | todo | todo | 见 [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md) |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
 
@@ -554,7 +570,8 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 **源码** `src/mini_llm/m07_instruction_finetune/__init__.py`  
 **脚本** [`finetune_instruction.py`](../finetune_instruction.py)  
 **配置** [`configs/config_instruction_small.json`](../configs/config_instruction_small.json)（Small + `smoke_trim`）、[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json)（全量数据；依赖 Medium checkpoint）  
-**REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) · **书本对齐细则** [`docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md`](docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md)
+**REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) · **书本对齐细则** [`docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md`](docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md)  
+**OpenSpec（行为契约）** [`openspec/specs/instruction-sft/spec.md`](openspec/specs/instruction-sft/spec.md)
 
 ### 公开 API
 
@@ -584,3 +601,14 @@ make_instruction_collate_fn(...) -> Callable  # DataLoader collate_fn
 ### 阻塞项
 
 - **轨道 B**：依赖 **P1-07** 产出可用 Medium 预训练 checkpoint（[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json) 内路径须存在）。
+
+---
+
+## P3-02 · 指令 SFT 效果检验、训练监控与质量优化
+
+**REQ** [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md)  
+**OpenSpec** 规划中需求见 [`openspec/specs/instruction-sft/spec.md`](openspec/specs/instruction-sft/spec.md) **§ Roadmap (REQ-P3-02)**；本条 closure 后应将对应条升格为正式 **Requirement**。  
+**依赖** P3-01（训练管线已实现）  
+**状态** `todo`：全 val 评估、epoch 末与 best 对齐、正式训练用 JSON 配置、固定 prompt 的双 checkpoint 对照生成等，见 REQ **§4** 阶段 A/B/C。
+
+（不要求新增 `m08` 模块；实现可落在 `finetune_instruction.py`、小脚本与文档。）

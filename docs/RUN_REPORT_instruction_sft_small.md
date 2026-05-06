@@ -1,7 +1,7 @@
 # 训练报告：指令微调（Small 冒烟配置）
 
 **实验名称：** `instruction_sft_small`  
-**关联 REQ：** [REQ-P3-01 · Ch7 指令 SFT](REQ-P3-01_Ch07InstructionSFT.md)、[对齐细则](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)  
+**关联 REQ：** [REQ-P3-01 · Ch7 指令 SFT](REQ-P3-01_Ch07InstructionSFT.md)、[对齐细则](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)、[REQ-P3-02 · 质检与优化](REQ-P3-02_InstructionSFTEvalAndQuality.md)  
 **配置文件：** [`configs/config_instruction_small.json`](../configs/config_instruction_small.json)  
 **报告日期：** 2026-05-05  
 **状态：** 单次跑通（冒烟规模，非全书级收敛实验）

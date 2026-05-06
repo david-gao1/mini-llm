@@ -2,7 +2,8 @@
 
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模块 03  
 **被依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（TransformerBlock 内的注意力层）  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)
 
 ---
 

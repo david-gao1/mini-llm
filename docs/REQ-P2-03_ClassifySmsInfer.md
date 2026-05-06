@@ -4,6 +4,7 @@
 **依赖**：[REQ-P2-02](REQ-P2-02_ClassifyFinetune.md)（`finetune_classify`：SMS ham/spam 分类 checkpoint）、[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel）  
 **被依赖**：无  
 **状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[短信分类 · `classify-sms/spec.md`](../openspec/specs/classify-sms/spec.md)  
 **可选后续（共享 backlog）**：[REQ-P2-02 §10](REQ-P2-02_ClassifyFinetune.md)（含 **`--json`** 等推理增强；以及 **BL-P2-02-03**：「换一套预训练底座再微调 SMS」的对照实验——**解释见 REQ-P2-02 §10.1**，与本 REQ 的推理契约无关）；**批量指标**见 **`eval_classify.py`** 与 REQ-P2-02 **§11**。
 
 ---

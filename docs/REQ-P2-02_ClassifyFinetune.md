@@ -4,6 +4,7 @@
 **依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）、P1-07（GPT-2 Small 预训练完成）  
 **被依赖**：[REQ-P2-03](REQ-P2-03_ClassifySmsInfer.md)（`classify_sms`：单行短信 → `ham`/`spam`）  
 **状态**：✅ **已完成**（主线：`finetune_classify` + `eval_classify` + §11 指标；可选增强仍列于 **§10 backlog**，不阻塞本条 REQ）  
+**OpenSpec（行为契约）**：[短信分类 · `classify-sms/spec.md`](../openspec/specs/classify-sms/spec.md)  
 **分析报告**：[REPORT_ClassifySpamProbe.md](REPORT_ClassifySpamProbe.md)（探针误判、高置信 FN、改进计划）  
 **领域详解**：[DOMAIN-KNOWLEDGE.md](DOMAIN-KNOWLEDGE.md) **§6.6**（混淆矩阵、PR/F1、FN 导出与 best checkpoint）
 

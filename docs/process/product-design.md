@@ -151,6 +151,7 @@ AI：好的，先澄清几个问题——
 |------|------|
 | **深入浅出** | 动机与边界用人话；**张量形状、配置字段、函数签名**放在「设计思路 / 契约 / Harness」。可与 Owner Checklist 一样配合 Java/流水线类比。 |
 | **SPEC / HARNESS** | **接口清单、状态、测试枚举** 以 [`SPEC.md`](../../SPEC.md)（文首 **SPEC 书写约定**）、[`HARNESS.md`](../../HARNESS.md) 为准；REQ 不复制会长表的闸门判据以免漂移。 |
+| **OpenSpec** | **可验收行为**（必须/应当 + 场景）以 [`openspec/specs/`](../../openspec/specs/) 为准；维护顺序见 [openspec-workflow.md](openspec-workflow.md)；REQ 头部 **OpenSpec（行为契约）** 链到对应 `spec.md`。 |
 
 ---
 

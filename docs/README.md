@@ -6,7 +6,7 @@
 
 | 类型 | 位置 | 用途 |
 |------|------|------|
-| **OpenSpec** | [`openspec/specs/`](../openspec/specs/) | 行为 **Purpose / Requirement / Scenario**（可与 AI 评审对齐验收口径） |
+| **OpenSpec** | [`openspec/specs/`](../openspec/specs/) | 行为 **目的 / 需求 / 场景**（可与 AI 评审对齐验收口径） |
 | **SPEC** | [`SPEC.md`](../SPEC.md) | **API、形状、实现状态、测试覆盖** |
 | **REQ** | 下表与 `REQ-*.md` | **业务动机、边界、分阶段交付与 backlog** |
 | **HARNESS** | [`HARNESS.md`](../HARNESS.md) | **可执行命令与通过判据** |
@@ -22,6 +22,7 @@
 | 文档 | 说明 |
 |------|------|
 | [process/product-design.md](process/product-design.md) | 产品设计流程：从想法到 REQ 条目 |
+| [process/openspec-workflow.md](process/openspec-workflow.md) | OpenSpec：行为规格与 SPEC/REQ/HARNESS 的维护顺序、`changes/` 约定 |
 | [process/development.md](process/development.md) | 开发流程规范：编码规范、提交规范、代码审查 |
 | [process/testing.md](process/testing.md) | 测试流程规范：测试分层、用例编写、回归策略 |
 | [process/iteration.md](process/iteration.md) | 迭代与发布流程：版本管理、技术债、复盘 |

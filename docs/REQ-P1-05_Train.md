@@ -3,7 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模块 05  
 **依赖**：[REQ-P1-01](REQ-P1-01_Tokenizer.md)（词表校验 + decode）、[REQ-P1-02](REQ-P1-02_DataLoader.md)（数据加载）、[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel）、[REQ-P2-01](REQ-P2-01_Generate.md)（采样展示）  
 **被依赖**：闸门 M1（预训练闭环）、闸门 M2（生成链路的前置 checkpoint）  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)
 
 ---
 

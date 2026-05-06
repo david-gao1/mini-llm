@@ -3,7 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模块 02  
 **依赖**：[REQ-P1-01](REQ-P1-01_Tokenizer.md)（encode_text 编码语料）  
 **被依赖**：[REQ-P1-05](REQ-P1-05_Train.md)（训练循环消费 DataLoader）  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)
 
 ---
 

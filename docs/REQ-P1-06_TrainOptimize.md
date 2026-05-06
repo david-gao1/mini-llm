@@ -3,7 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part I · train.py 优化  
 **依赖**：[REQ-P1-05](REQ-P1-05_Train.md)（train.py 基础训练循环已跑通）  
 **被依赖**：闸门 M1/M2 已通过；本 REQ 为训练质量与效率提升  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)
 
 ---
 

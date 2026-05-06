@@ -1,94 +1,94 @@
-# Pretraining (language modeling)
+# 预训练（语言建模）
 
-## Purpose
+## 目的
 
-在配置的英文（或兼容）语料上，自 **BPE 分词** → **固定上下文滑动窗口** → **因果 Transformer（GPT 风格）** → **下一词交叉熵训练** 形成闭环：训练与验证损失可计算，训练权重**须**持久化到 checkpoint，供生成或其它微调复用。  
-本规格覆盖 **Harness Part I（P1-01 … P1-05）** 与 **闸门 M1** 的可验收行为；**GPT-2 Medium / 大语料长线（P1-07）** 见 [REQ-P1-07](../../../docs/REQ-P1-07_GPT2Medium.md)，不阻塞 Small 闭环之 **MUST**。
+在配置的英文（或兼容）语料上，自 **BPE 分词** → **固定上下文滑动窗口** → **因果 Transformer（GPT 风格）** → **下一词交叉熵训练** 形成闭环：训练与验证损失可计算，训练权重 **必须** 持久化到 checkpoint，供生成或其它微调复用。  
+本规格覆盖 **Harness Part I（P1-01 … P1-05）** 与 **闸门 M1** 的可验收行为；**GPT-2 Medium / 大语料（P1-07）** 见 [REQ-P1-07](../../../docs/REQ-P1-07_GPT2Medium.md)，**不**作为 Small 闭环完成的阻塞条件（本文件中不对 P1-07 写「必须」）。
 
-## Non-goals
+## 非目标
 
-- **MUST NOT** 在本规格中固定「达到某 WikiText val_loss」；数值目标见运行报告与 [OWNER_CHECKLIST](../../../docs/OWNER_CHECKLIST.md)。  
-- **MAY** 使用 smoke / 截断配置做快速 Harness；与「全量训练」的 loss 不可比。
+- **不得**在本规格中规定「必须达到某一 WikiText val_loss」；具体数值目标见运行报告与 [OWNER_CHECKLIST](../../../docs/OWNER_CHECKLIST.md)。  
+- **可以**使用 smoke / 截断配置做快速 Harness；其与「全量训练」的 loss **不可**直接对比。
 
-## References
+## 参阅文档
 
 | 文档 | 用途 |
 |------|------|
-| [HARNESS.md](../../../HARNESS.md) Part I | REQ-ID、Harness 层、M1 判据 |
-| [SPEC.md](../../../SPEC.md) · P1-01 … P1-05 | 公开 API、形状、测试文件 |
-| [REQ-P1-01](../../../docs/REQ-P1-01_Tokenizer.md) … [REQ-P1-05](../../../docs/REQ-P1-05_Train.md) | 业务与分 REQ 边界 |
+| [HARNESS.md](../../../HARNESS.md) Part I | REQ-ID、Harness 分层、M1 判据 |
+| [SPEC.md](../../../SPEC.md) · P1-01 … P1-05 | 公开 API、张量形状、测试文件 |
+| [REQ-P1-01](../../../docs/REQ-P1-01_Tokenizer.md) … [REQ-P1-07](../../../docs/REQ-P1-07_GPT2Medium.md) | 各条需求叙事（各 REQ 头部链回本规格） |
 
 ---
 
-## Requirements
+## 需求
 
-### Requirement: Token vocabulary alignment
+### 需求：词表与分词对齐
 
-The system **MUST** use a tokenizer whose effective vocabulary size **matches** the configured `model.vocab_size` (GPT-2 BPE convention in this project) so that encode/decode pairs are consistent and invalid-vocab surprises do not occur at model boundaries.
+系统 **必须**使用有效词表规模与配置中的 `model.vocab_size` **一致**的分词器（本项目为 GPT-2 BPE 约定），使编码与解码配对一致，避免在模型边界出现越界词 id。
 
-#### Scenario: Round-trip encoding
+#### 场景：往返编码
 
-- **GIVEN** arbitrary text encodable under the project’s BPE settings
-- **WHEN** text is encoded to token ids and decoded back
-- **THEN** the result **SHALL** match the original text for that round-trip contract (as enforced by automated tests).
-
----
-
-### Requirement: Causal data windows
-
-The system **MUST** produce training batches where `input` and `target` are integer matrices of shape `[batch, context_length]`, targets are shifted by one position relative to inputs for next-token prediction, and indexing respects `context_length` and stride/split configuration without out-of-range accesses.
-
-#### Scenario: Loader batch shape
-
-- **GIVEN** a valid dataset configuration and `DataLoader` batching
-- **WHEN** a batch is drawn
-- **THEN** `input` and `target` **SHALL** have the same shape `[B, T]` with `T` equal to configured context length (or documented trim), and **SHALL** satisfy causal LM alignment.
+- **给定**在项目 BPE 设置下可编码的任意文本  
+- **当**将文本编码为 token id 再解码回字符串时  
+- **那么**结果 **应当**满足该往返契约（由自动化测试强制）。
 
 ---
 
-### Requirement: Causal self-attention
+### 需求：因果数据窗口
 
-The model’s attention **MUST** implement causal masking so that position *i* does not attend to positions *>* *i* (autoregressive constraint).
+系统 **必须**产出训练 batch：其中 `input` 与 `target` 为形状 `[batch, context_length]` 的整型矩阵，`target` 相对 `input` 做一位右移以实现下一词预测，且索引在 `context_length` 与步长/划分配置下 **不得**越界。
 
-#### Scenario: Attention module tests pass
+#### 场景：Loader 的 batch 形状
 
-- **GIVEN** the project’s attention test suite
-- **WHEN** `pytest` tests covering causal behavior run
-- **THEN** they **SHALL** pass against the reference expectations (shape / mask / known tensors as defined in tests).
-
----
-
-### Requirement: GPT forward pass contract
-
-The system **SHALL** provide a GPT-style module that maps token indices `[B, T]` to logits `[B, T, V]` where `V` is `model.vocab_size`.
-
-#### Scenario: Forward shape check
-
-- **GIVEN** a batch of token indices matching `[B, T]`
-- **WHEN** the model forward pass runs
-- **THEN** logits **SHALL** have shape `[B, T, V]` with **V** consistent with configuration.
+- **给定**合法的数据集配置与 `DataLoader` 组批  
+- **当**取出一个 batch 时  
+- **那么**`input` 与 `target` **应当**形状同为 `[B, T]`，`T` 等于配置的上下文长度（或文档记载的截断长度），且满足因果语言建模对齐。
 
 ---
 
-### Requirement: Pretraining loop and checkpoint
+### 需求：因果自注意力
 
-The system **MUST** implement a training entrypoint that computes cross-entropy next-token loss, performs evaluation on held-out data at documented intervals, and **SHALL** persist model state (and associated config metadata) to checkpoint files under the configured output directory/run name.
+模型的注意力 **必须**实现因果掩码：位置 *i* **不得** 注意（attend）到位置大于 *i* 的 token（自回归约束）。
 
-#### Scenario: M1 — short train completes
+#### 场景：注意力单测通过
 
-- **GIVEN** a valid project training configuration (e.g. small/smoke-friendly config)
-- **WHEN** the training script runs for the configured steps/epochs
-- **THEN** training and validation losses **SHALL** be finite real numbers (not NaN) within the monitored steps
-- **AND** **SHALL** write at least one checkpoint to the configured run path (e.g. `checkpoint_latest.pt` / `checkpoint_best.pt` per implementation).
-
-#### Scenario: Automated tests for the pretraining chain
-
-- **GIVEN** the repository dev environment
-- **WHEN** `pytest` is run for modules P1-01 … P1-04 and any integration tests prescribed in [HARNESS.md](../../../HARNESS.md)
-- **THEN** the relevant tests **SHALL** pass (L0/L1/L2 as applicable).
+- **给定**项目中针对注意力的测试套件  
+- **当**运行覆盖因果行为的 `pytest` 用例时  
+- **那么**用例 **应当**相对参考期望通过（形状 / 掩码 / 测试中给定的已知张量）。
 
 ---
 
-## Roadmap (P1-07)
+### 需求：GPT 前向契约
 
-When [REQ-P1-07](../../../docs/REQ-P1-07_GPT2Medium.md) is closed, **SHALL** add or extend Requirements here for **Medium** architecture + agreed corpus path, without contradicting the Small contract above.
+系统 **应当**提供 GPT 风格模块，将 token 索引 `[B, T]` 映射为 logits `[B, T, V]`，其中 `V` 为 `model.vocab_size`。
+
+#### 场景：前向形状检查
+
+- **给定**形状为 `[B, T]` 的 token 索引 batch  
+- **当**执行模型前向时  
+- **那么**logits **应当**为 `[B, T, V]`，且 **V** 与配置一致。
+
+---
+
+### 需求：预训练循环与 checkpoint
+
+系统 **必须**提供训练入口：计算下一词交叉熵损失，按文档记载的间隔在留出数据上评估，并 **应当**将模型状态及关联配置元数据写入 checkpoint 文件，路径在配置的输出目录/run 名下。
+
+#### 场景：M1 — 短训可完成
+
+- **给定**合法的训练配置（如小型/冒烟友好配置）  
+- **当**训练脚本按配置的步数/轮数运行时  
+- **那么**在监控到的步骤内，训练与验证损失 **应当**为有限实数（非 NaN）  
+- **且** **应当**在配置的 run 路径下至少写入一个 checkpoint（如实现中的 `checkpoint_latest.pt` / `checkpoint_best.pt`）。
+
+#### 场景：预训练链路的自动化测试
+
+- **给定**仓库开发环境  
+- **当**对 P1-01 … P1-04 及 [HARNESS.md](../../../HARNESS.md) 规定的集成测试运行 `pytest` 时  
+- **那么**相关测试 **应当**通过（依适用为 L0/L1/L2）。
+
+---
+
+## 路线图（P1-07）
+
+[REQ-P1-07](../../../docs/REQ-P1-07_GPT2Medium.md) 关闭后，**应当**在此补充或扩展 **Medium** 架构与约定语料路径相关的需求，且 **不得**与上文 Small 契约在语义上自相矛盾。

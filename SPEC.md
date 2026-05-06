@@ -11,7 +11,7 @@
 
 | 层 | 路径 | 回答什么 |
 |----|------|----------|
-| **行为规格** | [`openspec/specs/`](openspec/specs/) | 对外可验收的 **Purpose / Requirement / Scenario**（RFC 2119 语气） |
+| **行为规格** | [`openspec/specs/`](openspec/specs/) | 对外可验收的 **目的 / 需求 / 场景**（措辞见各 `spec.md`，对应 RFC 2119 语气的中文：**必须 / 应当 / 不得 / 可以**） |
 | **SPEC（本文件）** | [`SPEC.md`](SPEC.md) | **API 签名、张量形状、配置字段、实现状态、测试表** |
 | **需求故事** | [`docs/REQ-*.md`](docs/README.md) | **为何做、业务比方、边界与 backlog** |
 

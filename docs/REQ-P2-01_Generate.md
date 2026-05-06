@@ -3,7 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part II · 模块 05  
 **依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（GPTModel 前向推理）  
 **被依赖**：[REQ-P1-05](REQ-P1-05_Train.md)（训练中的采样展示）、闸门 M2（加载 checkpoint 生成文本）  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[自回归生成 · `generation/spec.md`](../openspec/specs/generation/spec.md)
 
 ---
 

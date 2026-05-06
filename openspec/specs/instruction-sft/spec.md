@@ -1,16 +1,16 @@
-# Instruction supervised fine-tuning (SFT)
+# 指令监督微调（SFT）
 
-## Purpose
+## 目的
 
-从已有 **自回归 GPT** 预训练权重出发，在 **书本格式指令数据**（`instruction` / 可选 `input` / `output`）上继续训练，使模型在「带 `### Instruction:` / `### Response:` 模板」的英文文本上预测下一 token；**不得**在 pad 位置上施加交叉熵监督。  
-本规格描述 **P3-01（轨道 A）** 已具备的行为；**评测与监控增强（P3-02）** 见 [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](../../../docs/REQ-P3-02_InstructionSFTEvalAndQuality.md)，closure 后再将对应 SHALL 并入本文件。
+从已有 **自回归 GPT** 预训练权重出发，在 **书本格式指令数据**（`instruction` / 可选 `input` / `output`）上继续训练，使模型在「带 `### Instruction:` / `### Response:` 模板」的英文文本上预测下一 token；**不得**在填充（pad）位置上对交叉熵损失计分。  
+本规格描述 **P3-01（轨道 A）** 已具备的行为；**评测与监控增强（P3-02）** 见 [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](../../../docs/REQ-P3-02_InstructionSFTEvalAndQuality.md)，该项关闭后应将对应 **必须** 条款并入本文件。
 
-## Non-goals
+## 非目标
 
-- **MUST NOT** 将本能力等同于「可靠事实问答」或 Chat 对齐；小数据与短训下生成质量不在本条目的保证范围内。  
-- **MAY** 后续通过 [REQ-P3-01 §9](../../../docs/REQ-P3-01_Ch07InstructionSFT.md) 所列 backlog 扩展 DPO 等；**当前规格不包含**偏好学习。
+- **不得**将本能力等同于「可靠事实问答」或与 Chat 类产品对齐；数据量很少、训练很短时，生成质量**不在**本规格保证范围内。  
+- **可以**后续通过 [REQ-P3-01 §9](../../../docs/REQ-P3-01_Ch07InstructionSFT.md) 所列 backlog 扩展 DPO 等；**当前规格不包含**偏好学习。
 
-## References
+## 参阅文档
 
 | 文档 | 用途 |
 |------|------|
@@ -21,69 +21,69 @@
 
 ---
 
-## Requirements
+## 需求
 
-### Requirement: Instruction string template
+### 需求：指令字符串模板
 
-The system **SHALL** assemble each training example into a single UTF-8 string that includes a fixed preamble, `### Instruction:` with the task text, optional `### Input:`, and `### Response:` followed by the reference output, consistent with the book-aligned template described in REQ-P3-01SUB.
+系统 **应当**将每条训练样本拼成单一 UTF-8 字符串，包含固定引导语、`### Instruction:` 与任务正文、可选的 `### Input:`、以及 `### Response:` 与参考答案全文，与 REQ-P3-01SUB 所述书本模板一致。
 
-#### Scenario: Optional input omitted
+#### 场景：省略可选 input
 
-- **GIVEN** a JSON record with empty or missing `input`
-- **WHEN** the template is built for encoding
-- **THEN** the string **SHALL NOT** introduce a spurious non-empty Input section (format matches the reference implementation in `m07_instruction_finetune`).
-
----
-
-### Requirement: Padding excluded from loss
-
-The system **MUST** exclude padded positions from the fine-tuning cross-entropy objective using an `ignore_index` (conventionally `-100`) so that the model is not trained to predict padding tokens.
-
-#### Scenario: Batched variable-length samples
-
-- **GIVEN** a batch of encoded samples of unequal length collated into fixed-shape `inputs` and `targets`
-- **WHEN** the loss is computed
-- **THEN** targets at padding positions **SHALL** be ignored by the cross-entropy reduction (equivalently: no gradient from those positions).
+- **给定** JSON 条目中 `input` 为空或缺失  
+- **当**为编码构建模板字符串时  
+- **那么**字符串 **不得** 多出一段无依据的非空 `Input` 区（格式与 `m07_instruction_finetune` 参考实现一致）。
 
 ---
 
-### Requirement: Fine-tuning script and checkpoint
+### 需求：填充位不计入损失
 
-The system **SHALL** provide an entrypoint that loads a pretrained GPT checkpoint compatible with [`GPTModel`](../../../SPEC.md), runs instruction SFT, and persists **`checkpoint_best.pt`** (or equivalent best-validation path) under the configured run directory.
+系统 **必须**在微调交叉熵中使用 `ignore_index`（约定 `-100`）排除填充位置，使模型不被训练去「预测填充 token」。
 
-#### Scenario: Smoke configuration completes
+#### 场景：变长样本成批
 
-- **GIVEN** a valid pretrained Small checkpoint (e.g. WikiText-103 `checkpoint_best.pt`) and [`configs/config_instruction_small.json`](../../../configs/config_instruction_small.json)
-- **WHEN** the instruction fine-tuning script is executed with that config
-- **THEN** the process **SHALL** terminate without NaN loss in normal operation
-- **AND** **SHALL** write a best checkpoint file to the run output directory per configuration (`runs/<run_name>/checkpoint_best.pt`).
-
-#### Scenario: Checkpoint carries instruction metadata
-
-- **GIVEN** a successful instruction SFT run
-- **WHEN** the best checkpoint is saved
-- **THEN** the file **SHALL** include `instruction_meta` (or equivalent) documenting template identity, pad token id, ignore index, and length policy, so inference or future runs can align with training assumptions.
+- **给定**一批长度不等的已编码样本，经 collate 得到固定形状的 `inputs` 与 `targets`  
+- **当**计算损失时  
+- **那么**处于填充位置的 target **应当**被交叉熵归约忽略（等价地：这些位置无梯度）。
 
 ---
 
-### Requirement: Automated tests for data path
+### 需求：微调入口与 checkpoint
 
-The system **MUST** ship automated tests that validate instruction splitting, download/cache behavior (local path), and collate/masking behavior aligned with the book reference.
+系统 **应当**提供入口程序：加载与 [`GPTModel`](../../../SPEC.md) 兼容的预训练 checkpoint，执行指令 SFT，并在配置的 run 目录下持久化 **`checkpoint_best.pt`**（或等价的「验证最优」路径）。
 
-#### Scenario: Instruction finetune test module passes
+#### 场景：冒烟配置跑通
 
-- **GIVEN** the project dev environment (`uv sync --extra dev` as applicable)
-- **WHEN** `pytest tests/test_instruction_finetune.py` is executed
-- **THEN** all tests **SHALL** pass.
+- **给定**合法的 Small 预训练 checkpoint（如 WikiText-103 的 `checkpoint_best.pt`）与 [`configs/config_instruction_small.json`](../../../configs/config_instruction_small.json)  
+- **当**以该配置执行指令微调脚本时  
+- **那么**正常情形下流程 **应当**结束且损失中不出现 NaN  
+- **且** **应当**按配置将最优 checkpoint 写入 run 输出目录（如 `runs/<run_name>/checkpoint_best.pt`）。
+
+#### 场景：checkpoint 携带指令元数据
+
+- **给定**一次成功的指令 SFT  
+- **当**写入最优 checkpoint 时  
+- **那么**文件 **应当**包含 `instruction_meta`（或等价字段），记录模板标识、pad token id、`ignore_index`、长度策略等，以便推理或后续训练与当时假设对齐。
 
 ---
 
-## Roadmap (normative target: REQ-P3-02)
+### 需求：数据通路的自动化测试
 
-The following are **not** yet required for P3-01 closure; they **SHALL** be satisfied when [REQ-P3-02](../../../docs/REQ-P3-02_InstructionSFTEvalAndQuality.md) is completed and HARNESS is updated:
+系统 **必须**提供自动化测试，校验指令数据划分、下载/缓存（本地路径）及与书本参考一致的 collate/掩码行为。
 
-- Configurable **full validation-set** loss (or explicit `eval_iter` semantics in logs).
-- **Epoch-end** (or unified) best-checkpoint policy vs step-based eval only.
-- Documented **paired generation** procedure (same prompt, pretrained vs SFT checkpoint, fixed decoding hyperparameters).
+#### 场景：指令微调测试模块通过
 
-Until then, see REQ-P3-02 and [`docs/OWNER_CHECKLIST.md`](../../../docs/OWNER_CHECKLIST.md) Part III for interim owner checks.
+- **给定**项目开发环境（如适用则 `uv sync --extra dev`）  
+- **当**执行 `pytest tests/test_instruction_finetune.py` 时  
+- **那么**全部用例 **应当**通过。
+
+---
+
+## 路线图（REQ-P3-02 归并目标）
+
+下列项在 **P3-01 关闭时仍非强制**；在 [REQ-P3-02](../../../docs/REQ-P3-02_InstructionSFTEvalAndQuality.md) 完成且 HARNESS 更新后 **必须**满足：
+
+- 可配置的 **整体验证集** loss（或在日志中明确 `eval_iter` 抽样语义）。  
+- **按 epoch 结束**（或统一）的最优 checkpoint 策略，相对「仅按步评估」。  
+- 成文规定的 **成对生成** 流程（相同提示语、预训练 vs SFT 权重、固定解码超参）。
+
+在此之前，过渡期的负责人自检见 REQ-P3-02 与 [`docs/OWNER_CHECKLIST.md`](../../../docs/OWNER_CHECKLIST.md) Part III。

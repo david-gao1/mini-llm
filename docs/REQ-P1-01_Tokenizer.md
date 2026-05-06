@@ -2,7 +2,8 @@
 
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模块 01  
 **被依赖**：[REQ-P1-02](REQ-P1-02_DataLoader.md)（DataLoader 编码入口）、[REQ-P1-05](REQ-P1-05_Train.md)（训练时词表校验与文本 decode）  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)
 
 ---
 

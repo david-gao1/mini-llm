@@ -1,16 +1,16 @@
-# SMS spam classification (微调与推理)
+# 短信垃圾分类（微调与推理）
 
-## Purpose
+## 目的
 
-在 **预训练 GPT 表征** 之上，用带标签的 **英文短信** 数据训练 **ham/spam 二分类**，导出含分类头与必要元数据（如 `spam_max_length`）的 checkpoint，并提供 **单行短信 → stdout 标签** 的 CLI。  
-本规格覆盖 **Harness Part II** 中 **P2-02**、**P2-03** 的可验收行为。
+在 **预训练 GPT 表征** 之上，用带标签的 **英文短信** 训练 **ham/spam 二分类**，导出含分类头与必要元数据（如 `spam_max_length`）的 checkpoint，并提供 **单行短信 → 标准输出标签** 的命令行工具。  
+本规格与 **Harness Part II** 中 **P2-02**、**P2-03** 的可验收行为对齐。
 
-## Non-goals
+## 非目标
 
-- **MUST NOT** 在本规格中固定「达到某商业垃圾邮件召回」；阈值与混淆矩阵解读见 [OWNER_CHECKLIST](../../../docs/OWNER_CHECKLIST.md) 与 [REQ-P2-02](../../../docs/REQ-P2-02_ClassifyFinetune.md)。  
+- **不得**在本规格中规定「必须达到某商业级垃圾召回」；阈值与混淆矩阵解读见 [OWNER_CHECKLIST](../../../docs/OWNER_CHECKLIST.md) 与 [REQ-P2-02](../../../docs/REQ-P2-02_ClassifyFinetune.md)。  
 - **多标签 / 多类** 扩展不在本文件范围。
 
-## References
+## 参阅文档
 
 | 文档 | 用途 |
 |------|------|
@@ -20,47 +20,47 @@
 
 ---
 
-## Requirements
+## 需求
 
-### Requirement: Classification fine-tuning produces a checkpoint
+### 需求：分类微调产出 checkpoint
 
-The system **SHALL** fine-tune (or train from a compatible pretrained LM) to minimize classification loss on labeled SMS data and **SHALL** persist `checkpoint_best.pt` (or equivalent) including classification head weights and metadata required to reproduce inference (e.g. max sequence length for SMS encoding).
+系统 **应当**在带标签短信数据上最小化分类损失（可从兼容的预训练 LM 起步进行微调），并持久化 `checkpoint_best.pt`（或等价物），其中包含分类头权重以及复现推理所需的元数据（如短信编码的最大序列长度）。
 
-#### Scenario: Training completes with reported metrics
+#### 场景：训练结束并输出指标
 
-- **GIVEN** a valid classify config and pretrained backbone path when required
-- **WHEN** the classification fine-tuning script runs to completion
-- **THEN** the process **SHALL** terminate without unhandled failure in normal operation
-- **AND** **SHALL** report test-set metrics (e.g. accuracy, confusion counts) consistent with [HARNESS.md](../../../HARNESS.md) expectations
-- **AND** **SHALL** write a best checkpoint under the configured run directory.
+- **给定**合法的分类配置及（若需要）预训练骨干路径  
+- **当**分类微调脚本跑完时  
+- **那么**正常情形下流程 **应当**结束且无未处理故障  
+- **且** **应当**报告与 [HARNESS.md](../../../HARNESS.md) 期望一致的测试集指标（如准确率、混淆计数等）  
+- **且** **应当**在配置的 run 目录下写入最优 checkpoint。
 
-#### Scenario: Test accuracy threshold (demonstration config)
+#### 场景：测试准确率阈值（演示配置）
 
-- **GIVEN** the project’s agreed demonstration configuration (e.g. phase_b default path in docs)
-- **WHEN** full training completes on the canonical split
-- **THEN** test accuracy **SHALL** meet or exceed **90%** as recorded in Harness / REQ (subject to same data and split as documented).
-
----
-
-### Requirement: Single-message inference CLI
-
-The system **SHALL** provide a CLI that loads a **classification** checkpoint (not a raw LM-only checkpoint without head), encodes one English SMS string, and prints exactly **`ham`** or **`spam`** to standard output.
-
-#### Scenario: CLI runs with default or explicit checkpoint
-
-- **GIVEN** a path to a valid classify checkpoint and a sample English SMS text
-- **WHEN** the inference script runs
-- **THEN** stdout **SHALL** be `ham` or `spam` (single line label as specified)
-- **AND** encoding **SHALL** match the dataset preprocessing contract.
+- **给定**项目约定的演示配置（如文档中的 phase_b 默认路径）  
+- **当**在文档约定的数据划分上完成完整训练时  
+- **那么**测试准确率 **应当**不低于 **90%**（与 Harness/REQ 记载一致，且数据与划分相同）。
 
 ---
 
-### Requirement: Automated tests
+### 需求：单条短信推理命令行
 
-The project **MUST** ship tests for classification dataset wiring, forward+loss, metrics, and CLI behavior as listed in SPEC.
+系统 **应当**提供命令行：加载 **分类** checkpoint（**不得**仅为无分类头的裸 LM），将一条英文短信编码后，向标准输出打印 **`ham`** 或 **`spam`**。
 
-#### Scenario: Pytest passes
+#### 场景：默认或显式指定 checkpoint 均可运行
 
-- **GIVEN** dev environment with test dependencies
-- **WHEN** `pytest tests/test_classify_finetune.py` (prescribed cases) and related metric tests run
-- **THEN** they **SHALL** pass.
+- **给定**合法的分类 checkpoint 路径与一条示例英文短信  
+- **当**执行推理脚本时  
+- **那么**标准输出 **应当**为单独一行的 `ham` 或 `spam`  
+- **且**编码方式 **应当**与数据集预处理约定一致。
+
+---
+
+### 需求：自动化测试
+
+项目 **必须**按 SPEC 所列，提供分类数据接线、前向+损失、指标与命令行行为等测试。
+
+#### 场景：Pytest 通过
+
+- **给定**含测试依赖的开发环境  
+- **当**运行 `pytest tests/test_classify_finetune.py`（规定用例）及相关指标测试时  
+- **那么** **应当**全部通过。

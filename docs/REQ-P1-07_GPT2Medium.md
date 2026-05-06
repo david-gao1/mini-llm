@@ -3,7 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模型与数据升级  
 **依赖**：[REQ-P1-06](REQ-P1-06_TrainOptimize.md)（训练优化已到位：MPS / scheduler / early stopping）  
 **被依赖**：无  
-**状态**：进行中（WikiText-2 已完成 → WikiText-103 训练中）
+**状态**：进行中（WikiText-2 已完成 → WikiText-103 训练中）  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)（Medium 完成见该文件 **路线图（P1-07）**）
 
 ---
 

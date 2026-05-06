@@ -1,52 +1,52 @@
-# Autoregressive text generation
+# 自回归文本生成
 
-## Purpose
+## 目的
 
-从 **预训练（或其它兼容的）checkpoint** 重建自回归 GPT，对给定 **prompt token 序列** 按温度与 top-k（或等价策略）**续写**新 token，并 **SHALL** 能解码为人类可读文本。  
-本规格覆盖 **Harness Part II** 中与 **P2-01**、**闸门 M2** 一致的生成侧行为。
+从 **预训练（或其它兼容的）checkpoint** 恢复自回归 GPT，对给定 **提示语对应的 token 序列** 按温度与 top-k（或等价策略）**续写**新 token，并 **应当**能解码为人类可读文本。  
+本规格与 **Harness Part II** 中 **P2-01**、**闸门 M2** 的生成侧行为对齐。
 
-## Non-goals
+## 非目标
 
-- **MUST NOT** 保证任意语言或域外 prompt 的「语义正确」；仅保证 **程序可执行、输出可 decode**。  
-- **Chat / 指令遵循** 见 [`instruction-sft`](../instruction-sft/spec.md)（P3），不在本文件扩展。
+- **不得**保证任意语言或**域外提示语**的「语义正确」；仅保证 **程序可执行、输出可被正确解码**。  
+- **对话式 / 指令遵循** 见 [`instruction-sft`](../instruction-sft/spec.md)（P3），不在本文件扩展。
 
-## References
+## 参阅文档
 
 | 文档 | 用途 |
 |------|------|
 | [HARNESS.md](../../../HARNESS.md) Part II | P2-01、M2 |
 | [SPEC.md](../../../SPEC.md) · P2-01、`generate_from_checkpoint.py` | API 与脚本入口 |
-| [REQ-P2-01](../../../docs/REQ-P2-01_Generate.md) | 需求故事 |
+| [REQ-P2-01](../../../docs/REQ-P2-01_Generate.md) | 需求叙事 |
 
 ---
 
-## Requirements
+## 需求
 
-### Requirement: Load checkpoint and generate continuation
+### 需求：加载 checkpoint 并续写
 
-The system **SHALL** load model weights and architecture configuration from a training-produced checkpoint file and **SHALL** extend an initial token sequence by autoregressive sampling or greedy decoding per configured `temperature` and `top-k` (when supported).
+系统 **应当**从训练产出的 checkpoint 加载模型权重与结构配置，并按配置的 `temperature` 与 `top-k`（若支持）通过自回归采样或贪心解码 **延长**初始 token 序列。
 
-#### Scenario: M2 — non-empty continuation
+#### 场景：M2 — 非空续写
 
-- **GIVEN** a checkpoint compatible with the project’s `GPTModel` and a short prompt encoded to token ids
-- **WHEN** the generation entrypoint runs with default or documented decoding settings
-- **THEN** the output sequence **SHALL** be longer than the input (or explicitly documented as empty only on error)
-- **AND** decoded text **SHALL** be non-empty in the success path (M2: 训练 → 生成链路可跑通).
+- **给定**与项目 `GPTModel` 兼容的 checkpoint，以及将短提示语编码得到的 token id  
+- **当**在默认或文档记载的设置下运行生成入口时  
+- **那么**输出序列 **应当**长于输入（或仅在错误路径下文档明确可为空）  
+- **且**在成功路径上解码文本 **应当**非空（M2：训练 → 生成链路跑通）。
 
-#### Scenario: Decode matches tokenizer
+#### 场景：解码与分词器一致
 
-- **GIVEN** generated token ids
-- **WHEN** ids are decoded with the same codec used in training
-- **THEN** the result **SHALL** be a string without raising in normal operation (subject to special-token policy documented in DOMAIN knowledge).
+- **给定**已生成的 token id  
+- **当**使用与训练相同的编解码方式进行解码时  
+- **那么**在正常运行下 **应当**得到字符串且无未处理异常（特殊 token 策略见 DOMAIN 知识文档）。
 
 ---
 
-### Requirement: Tests for generation path
+### 需求：生成路径的测试
 
-The system **MUST** include automated coverage that exercises generation (or generate-suitable helpers) with fixed seeds or small loops where applicable.
+系统 **必须**包含自动化测试覆盖，在适用时用固定种子或小步长循环 **调用** `generate`（或等价辅助逻辑）。
 
-#### Scenario: Pytest passes
+#### 场景：Pytest 通过
 
-- **GIVEN** project tests that exercise `mini_llm.m05_generate.generate` (e.g. `tests/test_model_forward.py::test_generate_step`)
-- **WHEN** `pytest` runs these tests
-- **THEN** they **SHALL** pass.
+- **给定**项目中 exercise `mini_llm.m05_generate.generate` 的测试（例如 `tests/test_model_forward.py::test_generate_step`）  
+- **当**运行 `pytest` 时  
+- **那么**相关用例 **应当**通过。

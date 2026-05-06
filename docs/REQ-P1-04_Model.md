@@ -3,7 +3,8 @@
 **所属**：[SPEC.md](../SPEC.md) → Part I · 模块 04  
 **依赖**：[REQ-P1-03](REQ-P1-03_Attention.md)（MultiHeadAttention）  
 **被依赖**：[REQ-P1-05](REQ-P1-05_Train.md)（训练循环）、[REQ-P2-01](REQ-P2-01_Generate.md)（自回归生成）  
-**状态**：✅ 已完成
+**状态**：✅ 已完成  
+**OpenSpec（行为契约）**：[预训练 · `pretraining/spec.md`](../openspec/specs/pretraining/spec.md)
 
 ---
 

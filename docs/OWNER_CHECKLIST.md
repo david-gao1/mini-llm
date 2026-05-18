@@ -2,7 +2,8 @@
 
 **读者**：项目负责人（有工程经验、正在学习 ML 理论）  
 **用途**：拿到一个 REQ「完成」的交付后，**自己跑命令、看输出、判断是否合格**——不依赖开发者口头说「过了」  
-**与 SPEC/HARNESS 的关系**：SPEC 定义 API 契约，HARNESS 定义闸门；本文档定义 **你作为 Owner 的「验收动作 + 判断准则」**
+**与 SPEC/HARNESS 的关系**：SPEC 定义 API 契约，HARNESS 定义闸门；本文档定义 **你作为 Owner 的「验收动作 + 判断准则」**。  
+**与 OpenSpec**：条文级「必须 / 应当 / 场景」见 [`openspec/specs/`](../openspec/specs/)（REQ 叙事对应关系见 [`docs/README.md`](README.md) **Harness × OpenSpec × REQ 总览**）。
 
 ---
 
@@ -254,15 +255,22 @@ test 集（约 300 条）——训练时模型**从未见过**这些短信。如
 
 ## Part III — 指令 SFT 质检（P3-02）
 
-**完整需求与分阶段交付**：[REQ-P3-02_InstructionSFTEvalAndQuality.md](REQ-P3-02_InstructionSFTEvalAndQuality.md)（todo）。本节只列 **当前可执行的验收动作**；脚本增强（全 val、epoch 末存 best 等）以 REQ §4 为准。
+**完整需求与分阶段交付**：[REQ-P3-02_InstructionSFTEvalAndQuality.md](REQ-P3-02_InstructionSFTEvalAndQuality.md)（Small-only 质检闭环已收口；自动评分 / 批量导出仍为 backlog）。本节列 **可执行验收动作**。
 
-### P3-02-A · 管线 + 主观对照（现阶段）
+### P3-02-A · 管线 + 主观对照（Small 底座）
 
 | # | 你跑什么 | 你看什么 | 怎么判断 |
 |---|---------|---------|---------|
 | 1 | `cd team-mini-llm && uv run pytest tests/test_instruction_finetune.py -q` | `N passed` | 单测全绿 |
-| 2 | 确认 `runs/instruction_sft_small/checkpoint_best.pt` 存在 | 文件有、大小合理 | ✅ |
-| 3 | 用 **同一英文 instruction 模板**（含 `### Instruction:` / `### Response:`），先后指定 **SFT** 与 **预训练** checkpoint 运行 `generate_from_checkpoint.py`，**解码参数完全一致** | 两段 stdout | 记录到表格；**冒烟数据下不要求**答对事实，对比 **谁在 Response 后更贴「简短回答」** 即有价值 |
+| 2 | 确认 `runs/instruction_sft_small/checkpoint_best.pt`（或正式 Small：`runs/instruction_train_small/checkpoint_best.pt`）存在 | 文件有、大小合理 | ✅ |
+| 3 | 用 **同一英文 instruction 模板**（含 `### Instruction:` / `### Response:`），先后指定 **SFT Small** 与 **预训练 Small** checkpoint 运行 `generate_from_checkpoint.py`，**解码参数完全一致** | 两段 stdout | 记录到表格；**冒烟数据下不要求**答对事实，对比 **谁在 Response 后更贴「简短回答」** 即有价值 |
+| 4 | `uv run python eval_instruction_loss.py --config configs/config_instruction_small.json --checkpoint runs/instruction_sft_small/checkpoint_best.pt`（或 `finetune_instruction.py --eval-val-only --eval-checkpoint … --config …`） | `val_loss_sampled=`、`val_loss_full=` 两行 | 无 traceback；数值应为有限浮点 |
+
+### P3-02-B · 一键对照生成（可选）
+
+| # | 你跑什么 | 你看什么 | 怎么判断 |
+|---|---------|---------|---------|
+| 1 | `uv run python compare_instruction_generate.py --pretrained runs/gpt2_small_wikitext103/checkpoint_best.pt --sft runs/instruction_sft_small/checkpoint_best.pt --prompt-file docs/prompts/instruction_compare_sample.txt` | Markdown：**Pretrained** / **After instruction SFT** | 两段可读英文即可；「更好」记在表格 |
 
 **预训练权重路径示例：** `runs/gpt2_small_wikitext103/checkpoint_best.pt`。
 

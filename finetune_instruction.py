@@ -7,6 +7,12 @@ uv run python finetune_instruction.py --config configs/config_instruction_small.
 
 覆盖权重路径：
 uv run python finetune_instruction.py --config ... --checkpoint runs/gpt2_small_wikitext103/checkpoint_best.pt
+
+只评估验证集 CE（抽样 + 全量），不写盘：
+uv run python finetune_instruction.py --config configs/config_instruction_small.json \\
+  --eval-val-only --eval-checkpoint runs/instruction_sft_small/checkpoint_best.pt
+
+亦可用薄封装 ``eval_instruction_loss.py``（同上逻辑）。
 """
 
 from __future__ import annotations
@@ -98,12 +104,181 @@ def calc_loss_loader_instruction(
     return total / limit
 
 
+def _resolve_eval_batch_limits(i_cfg: dict) -> tuple[int | None, int | None]:
+    """返回 (train_batches, val_batches)：None 表示扫完整 DataLoader。
+
+    - ``eval_iter`` 为 JSON ``null``：train/val 在按步评估时均扫全集（慢；适合小数据）。
+    - ``eval_iter`` 为 int：train 使用该上限；val 默认相同，可被 ``eval_val_batches`` 覆盖
+      （``null`` = 全 val；int = 前若干个 batch）。
+    """
+    raw_iter = i_cfg.get("eval_iter")
+    if raw_iter is None:
+        return None, None
+    train_cap = int(raw_iter)
+    if "eval_val_batches" not in i_cfg:
+        return train_cap, train_cap
+    raw_val = i_cfg["eval_val_batches"]
+    if raw_val is None:
+        return train_cap, None
+    return train_cap, int(raw_val)
+
+
+def _save_instruction_best(
+    best_path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    ckpt: dict,
+    cfg: dict,
+    global_step: int,
+    epoch: int,
+    best_val_loss: float,
+    instruction_meta: dict,
+) -> None:
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "config": ckpt["config"],
+            "instruction_finetune_config": cfg,
+            "global_step": global_step,
+            "epoch": epoch,
+            "best_val_loss": best_val_loss,
+            "instruction_meta": instruction_meta,
+        },
+        best_path,
+    )
+
+
+def run_eval_val_only(config_path: Path, eval_ckpt_path: Path) -> int:
+    """加载 SFT（或预训练）checkpoint，在同一套 val DataLoader 上打印抽样与全量 val loss。"""
+    if not config_path.is_file():
+        print(f"Config not found: {config_path}", file=sys.stderr)
+        return 1
+    if not eval_ckpt_path.is_file():
+        print(f"Checkpoint not found: {eval_ckpt_path}", file=sys.stderr)
+        return 1
+
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    seed = int(cfg.get("seed", 123))
+    _set_seed(seed)
+
+    from mini_llm.m01_tokenizer import encode_text
+    from mini_llm.m04_model import GPTModel
+    from mini_llm.m07_instruction_finetune import (
+        IGNORE_INDEX_DEFAULT,
+        PAD_TOKEN_ID_DEFAULT,
+        InstructionDataset,
+        download_instruction_json,
+        make_instruction_collate_fn,
+        split_instruction_entries,
+    )
+
+    data_cfg = cfg["data"]
+    i_cfg = cfg["instruction_finetune"]
+    cache_path = _ROOT / Path(data_cfg["cache_path"])
+    url = str(data_cfg["url"])
+    entries = download_instruction_json(cache_path, url)
+    train_ratio = float(data_cfg.get("train_ratio", 0.85))
+    test_ratio = float(data_cfg.get("test_ratio", 0.1))
+    train_data, val_data, test_data = split_instruction_entries(
+        entries, train_ratio=train_ratio, test_ratio=test_ratio
+    )
+    smoke_trim = i_cfg.get("smoke_trim")
+    if smoke_trim is not None:
+        k = int(smoke_trim)
+        train_data = train_data[:k]
+        val_data = val_data[:k]
+        test_data = test_data[:k]
+
+    device = _pick_device(str(cfg.get("device", "auto")))
+    allowed_max_length = i_cfg.get("allowed_max_length")
+    if allowed_max_length is not None:
+        allowed_max_length = int(allowed_max_length)
+    pad_token_id = int(i_cfg.get("pad_token_id", PAD_TOKEN_ID_DEFAULT))
+    ignore_index = int(i_cfg.get("ignore_index", IGNORE_INDEX_DEFAULT))
+
+    collate = make_instruction_collate_fn(
+        pad_token_id=pad_token_id,
+        ignore_index=ignore_index,
+        allowed_max_length=allowed_max_length,
+        device=device,
+    )
+    torch.manual_seed(seed)
+    val_ds = InstructionDataset(val_data, encode_text)
+    batch_size = int(i_cfg["batch_size"])
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        collate_fn=collate,
+        num_workers=0,
+    )
+
+    try:
+        ckpt_eval = torch.load(eval_ckpt_path, map_location="cpu", weights_only=False)
+    except TypeError:
+        ckpt_eval = torch.load(eval_ckpt_path, map_location="cpu")
+
+    model_cfg = ckpt_eval["config"]["model"]
+    ctx = int(model_cfg["context_length"])
+    if allowed_max_length is not None and allowed_max_length > ctx:
+        allowed_max_length = ctx
+        collate = make_instruction_collate_fn(
+            pad_token_id=pad_token_id,
+            ignore_index=ignore_index,
+            allowed_max_length=allowed_max_length,
+            device=device,
+        )
+        val_loader = DataLoader(
+            val_ds,
+            batch_size=batch_size,
+            shuffle=False,
+            drop_last=False,
+            collate_fn=collate,
+            num_workers=0,
+        )
+
+    model = GPTModel(model_cfg)
+    model.load_state_dict(ckpt_eval["model_state_dict"])
+    model.to(device)
+
+    train_batches, val_batches = _resolve_eval_batch_limits(i_cfg)
+    sampled = calc_loss_loader_instruction(
+        val_loader, model, device, val_batches, ignore_index
+    )
+    full = calc_loss_loader_instruction(val_loader, model, device, None, ignore_index)
+    print(f"val_loss_sampled={sampled:.6f}")
+    print(f"val_loss_full={full:.6f}")
+    return 0
+
+
 def main() -> int:
     # --- 参数与配置 ---
     parser = argparse.ArgumentParser(description="Instruction finetuning (SFT) for GPTModel")
     parser.add_argument("--config", type=Path, default=_ROOT / "configs" / "config_instruction_small.json")
     parser.add_argument("--checkpoint", type=Path, default=None, help="Override pretrained_checkpoint in config")
+    parser.add_argument(
+        "--eval-val-only",
+        action="store_true",
+        help="只评估验证集 CE（抽样 + 全量），不写权重；需配合 --eval-checkpoint",
+    )
+    parser.add_argument(
+        "--eval-checkpoint",
+        type=Path,
+        default=None,
+        help="与 --eval-val-only 连用：要打分的 .pt（通常为 SFT checkpoint_best.pt）",
+    )
     args = parser.parse_args()
+
+    if args.eval_val_only:
+        if args.eval_checkpoint is None or not args.eval_checkpoint.is_file():
+            print(
+                "--eval-val-only 需要现有文件路径：--eval-checkpoint runs/.../checkpoint_best.pt",
+                file=sys.stderr,
+            )
+            return 1
+        return run_eval_val_only(args.config, args.eval_checkpoint)
 
     if not args.config.is_file():
         print(f"Config not found: {args.config}", file=sys.stderr)
@@ -262,7 +437,8 @@ def main() -> int:
 
     num_epochs = int(i_cfg["num_epochs"])
     eval_freq = int(i_cfg["eval_freq"])
-    eval_iter = int(i_cfg["eval_iter"])
+    eval_train_batches, eval_val_batches = _resolve_eval_batch_limits(i_cfg)
+    epoch_val_full = bool(i_cfg.get("epoch_val_full", True))
     grad_clip = float(i_cfg.get("grad_clip", 1.0))
 
     run_name = cfg.get("run_name", "instruction_sft")
@@ -284,10 +460,16 @@ def main() -> int:
     global_step = -1  # 先 -1，进入第一个 batch 后为 0，便于按「第几步」做 eval_freq
     t_start = time.time()
 
+    def _fmt_batches(cap: int | None) -> str:
+        return "full" if cap is None else str(cap)
+
     print(f"\n{'='*60}")
     print(
         f"Instruction SFT: {num_epochs} epochs, batch={batch_size}, "
-        f"eval every {eval_freq} steps (eval_iter={eval_iter})"
+        f"eval every {eval_freq} steps "
+        f"(train_batches={_fmt_batches(eval_train_batches)} "
+        f"val_batches={_fmt_batches(eval_val_batches)}); "
+        f"epoch_val_full={epoch_val_full}"
     )
     print(f"{'='*60}\n")
 
@@ -305,43 +487,65 @@ def main() -> int:
             optimizer.step()
             global_step += 1
 
-            # 每隔 eval_freq 步在 train/val 上各算 eval_iter 个 batch 的平均 loss（非整集，仅监测趋势）。
+            # 每隔 eval_freq 步在 train/val 上算平均 loss（batch 上限见 eval_train_batches / eval_val_batches）。
             if global_step % eval_freq == 0:
                 tr = calc_loss_loader_instruction(
-                    train_loader, model, device, eval_iter, ignore_index
+                    train_loader, model, device, eval_train_batches, ignore_index
                 )
                 va = calc_loss_loader_instruction(
-                    val_loader, model, device, eval_iter, ignore_index
+                    val_loader, model, device, eval_val_batches, ignore_index
                 )
                 elapsed = _fmt_duration(time.time() - t_start)
                 print(
                     f"Ep {epoch + 1} Step {global_step:04d} [{elapsed}] "
-                    f"train_loss={tr:.4f} val_loss={va:.4f}"
+                    f"train_loss={tr:.4f} val_loss_sampled={va:.4f}"
                 )
 
                 # va != va 检测 NaN；无效 loss 不写 best。
                 if va < best_val_loss and not (va != va):  # not nan
                     best_val_loss = va
-                    torch.save(
-                        {
-                            "model_state_dict": model.state_dict(),
-                            "optimizer_state_dict": optimizer.state_dict(),
-                            "config": ckpt["config"],
-                            "instruction_finetune_config": cfg,
-                            "global_step": global_step,
-                            "epoch": epoch,
-                            "best_val_loss": best_val_loss,
-                            "instruction_meta": instruction_meta,
-                        },
+                    _save_instruction_best(
                         best_path,
+                        model,
+                        optimizer,
+                        ckpt,
+                        cfg,
+                        global_step,
+                        epoch,
+                        best_val_loss,
+                        instruction_meta,
                     )
-                    print(f"  -> New best val_loss={best_val_loss:.4f}, saved -> {best_path}")
+                    print(f"  -> New best val_loss_sampled={best_val_loss:.4f}, saved -> {best_path}")
 
         ep_tr = calc_loss_loader_instruction(
-            train_loader, model, device, eval_iter, ignore_index
+            train_loader, model, device, eval_train_batches, ignore_index
         )
-        ep_va = calc_loss_loader_instruction(val_loader, model, device, eval_iter, ignore_index)
-        print(f"  End epoch {epoch + 1}: train_loss={ep_tr:.4f} val_loss={ep_va:.4f}")
+        ep_va_s = calc_loss_loader_instruction(
+            val_loader, model, device, eval_val_batches, ignore_index
+        )
+        ep_va_full = calc_loss_loader_instruction(
+            val_loader, model, device, None, ignore_index
+        )
+        print(
+            f"  End epoch {epoch + 1}: train_loss={ep_tr:.4f} "
+            f"val_loss_sampled={ep_va_s:.4f} val_loss_full={ep_va_full:.4f}"
+        )
+        if epoch_val_full and not (ep_va_full != ep_va_full) and ep_va_full < best_val_loss:
+            best_val_loss = ep_va_full
+            _save_instruction_best(
+                best_path,
+                model,
+                optimizer,
+                ckpt,
+                cfg,
+                global_step,
+                epoch,
+                best_val_loss,
+                instruction_meta,
+            )
+            print(
+                f"  -> New best val_loss_full={best_val_loss:.4f} (epoch end), saved -> {best_path}"
+            )
 
     # --- 收尾：若从未因 val 存过盘，则把最后一轮权重写入 checkpoint_best.pt ---
     total_time = time.time() - t_start

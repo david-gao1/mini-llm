@@ -415,7 +415,7 @@ uv run python generate_from_checkpoint.py \
 **若在本项目路线上的务实延展（由易到难）：**
 
 1. **对比 baseline**：直接试用开源 Chat 模型或 API，理解「预训练基座」与「对话模型」的差距。  
-2. **在现有 checkpoint 上做小规模指令微调**：详见已定 [**REQ-P3-01**](REQ-P3-01_Ch07InstructionSFT.md)：对齐书本第 7 章数据与脚本逻辑，**仅 SFT**；**Small + 短指令集** 与 **GPT-2 Medium 底座** 两轨并行推进；**DPO / 偏好** 记在 REQ-P3-01 §9 backlog，不作为本条前置。（若想中英自备 JSON，仍可套用同一管线，但以书里 `instruction-data.json` 为第一对照源。）  
+2. **在现有 checkpoint 上做小规模指令微调**：详见已定 [**REQ-P3-01**](REQ-P3-01_Ch07InstructionSFT.md)：对齐书本第 7 章数据与脚本逻辑，**仅 SFT**；本轮以 **GPT-2 Small checkpoint** 为底座完成冒烟与质检闭环，Medium 不作为 SFT 底座。**DPO / 偏好** 记在 REQ-P3-01 §9 backlog，不作为本条前置。（若想中英自备 JSON，仍可套用同一管线，但以书里 `instruction-data.json` 为第一对照源。）  
 3. **更大预训练或更多语料**：提升语言与事实的上限，时间与算力显著增加。  
 4. **应用层 RAG**：若要可控的事实问答，在推理管线外挂检索。
 
@@ -603,7 +603,8 @@ P1-07  GPT-2 Medium          wip     WikiText-103 raw 训练中
   ── GPT-2 Small            done    163M, WikiText-103, val_loss=3.3092
 P2-02  finetune_classify  预训练 GPT→SMS ham/spam `.pt`   done    REQ-P2-02；含 BL-P2-02-02 评估与 eval_classify（DOMAIN §6.6 / REQ §11）
 P2-03  classify_sms  单行短信→ham/spam（stdout）     done    REQ-P2-03；依赖 P2-02 分类 checkpoint
-P3-01  Ch7 指令 SFT        wip→A done  REQ-P3-01；m07 + finetune_instruction；B 待 Medium ckpt
+P3-01  Ch7 指令 SFT        done        REQ-P3-01；Small 底座；m07 + finetune_instruction
+P3-02  指令 SFT 质检闭环   done        eval_val_only + compare + full-val；自动评分/批量导出为 backlog
 ```
 
 ---

@@ -1,0 +1,16 @@
+# Sample prompts for compare_instruction_generate.py (English instruction template).
+
+Below is an instruction that describes a task. Write a response that appropriately completes the request.
+
+### Instruction:
+What is the capital of France?
+
+### Response:
+
+---
+Below is an instruction that describes a task. Write a response that appropriately completes the request.
+
+### Instruction:
+Translate the following to Spanish: Good morning.
+
+### Response:

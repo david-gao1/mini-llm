@@ -132,7 +132,7 @@ flowchart LR
 
 ### 2.3 和「像 Chat 一样听话」还差什么？
 
-本配置是 **跑道 A：冒烟**。数据 24×3、1 个 epoch，**不是为了对话质量**。要肉眼质变：去 `smoke_trim`、加 epoch、数据全、必要时 Medium（REQ 跑道 B）。
+本配置是 **Small 冒烟**。数据 24×3、1 个 epoch，**不是为了对话质量**。要肉眼质变：去 `smoke_trim`、加 epoch、数据全，并使用 `configs/config_instruction_train_small.json` 的全 val 质检口径。Medium checkpoint **不作为本轮 SFT 底座**。
 
 ---
 

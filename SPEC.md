@@ -54,8 +54,8 @@ REQ 文档的人话与 §1 优先级见 [`docs/process/product-design.md`](docs/
 | `m05_generate` | P2-01 | done | done | — |
 | `m06_classify_finetune` | P2-02 | done | done | — |
 | `classify_sms.py` | P2-03 | done | done | — |
-| `m07_instruction_finetune` | P3-01 | done | done | 轨道 B：须先有 Medium checkpoint（P1-07） |
-| 指令 SFT 质检 / 监控 / 对照脚本 | P3-02 | todo | todo | 见 [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md) |
+| `m07_instruction_finetune` | P3-01 | done | done | Medium 不作为本轮 SFT 底座 |
+| 指令 SFT 质检 / 监控 / 对照脚本 | P3-02 | done | done | Small-only 收口；自动评分 / 批量导出仍为 backlog |
 | **闸门 M1** | — | — | done | — |
 | **闸门 M2** | — | — | done | — |
 
@@ -565,11 +565,11 @@ load_spam_classifier_checkpoint(path: Path | str, device: torch.device) -> tuple
 
 ## Part III（第 7 章 · 指令微调 SFT）
 
-## P3-01 · `m07_instruction_finetune` — Ch7 指令 SFT（双轨 Small / Medium）
+## P3-01 · `m07_instruction_finetune` — Ch7 指令 SFT（Small 底座）
 
 **源码** `src/mini_llm/m07_instruction_finetune/__init__.py`  
-**脚本** [`finetune_instruction.py`](../finetune_instruction.py)  
-**配置** [`configs/config_instruction_small.json`](../configs/config_instruction_small.json)（Small + `smoke_trim`）、[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json)（全量数据；依赖 Medium checkpoint）  
+**脚本** [`finetune_instruction.py`](../finetune_instruction.py)（支持 `--eval-val-only` + `--eval-checkpoint`；[`eval_instruction_loss.py`](../eval_instruction_loss.py) 为薄封装）  
+**配置** [`configs/config_instruction_small.json`](../configs/config_instruction_small.json)（Small + `smoke_trim`）、[`configs/config_instruction_train_small.json`](../configs/config_instruction_train_small.json)（全划分数据、多 epoch、`eval_val_batches: null` 表示按步评估扫**整集 val**）。[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json) 保留为历史/可选实验配置，**不作为本轮 P3 底座**。  
 **REQ 文档** [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md) · **书本对齐细则** [`docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md`](docs/REQ-P3-01SUB_Ch07InstructionBookAlignment.md)  
 **OpenSpec（行为契约）** [`openspec/specs/instruction-sft/spec.md`](openspec/specs/instruction-sft/spec.md)
 
@@ -590,7 +590,7 @@ make_instruction_collate_fn(...) -> Callable  # DataLoader collate_fn
 
 ### 实现状态
 
-`done`（**轨道 A**：Small + 书本 JSON + `finetune_instruction.py`；**轨道 B**：配置已备，仍依赖 **P1-07** Medium checkpoint）。**DPO** 见 REQ-P3-01 §9。
+`done` — Small + 书本 JSON + `finetune_instruction.py` 已形成可训练、可复评、可对照生成的 SFT 链路。Medium checkpoint **不作为本轮底座**；**DPO** 见 REQ-P3-01 §9。
 
 ### 测试覆盖
 
@@ -600,15 +600,15 @@ make_instruction_collate_fn(...) -> Callable  # DataLoader collate_fn
 
 ### 阻塞项
 
-- **轨道 B**：依赖 **P1-07** 产出可用 Medium 预训练 checkpoint（[`configs/config_instruction_medium.json`](../configs/config_instruction_medium.json) 内路径须存在）。
+无。P3 当前以 **Small 预训练 checkpoint** 为底座收口；P1-07 Medium 训练不阻塞 P3。
 
 ---
 
 ## P3-02 · 指令 SFT 效果检验、训练监控与质量优化
 
 **REQ** [`docs/REQ-P3-02_InstructionSFTEvalAndQuality.md`](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md)  
-**OpenSpec** 规划中需求见 [`openspec/specs/instruction-sft/spec.md`](openspec/specs/instruction-sft/spec.md) **§ Roadmap (REQ-P3-02)**；本条 closure 后应将对应条升格为正式 **Requirement**。  
+**OpenSpec** 行为契约见 [`openspec/specs/instruction-sft/spec.md`](openspec/specs/instruction-sft/spec.md)（含 P3-02 **设计与取舍**、**验证口径 / epoch 最优 / 对照脚本** 等需求）；遗留 backlog 见该文件末节 **路线图**。  
 **依赖** P3-01（训练管线已实现）  
-**状态** `todo`：全 val 评估、epoch 末与 best 对齐、正式训练用 JSON 配置、固定 prompt 的双 checkpoint 对照生成等，见 REQ **§4** 阶段 A/B/C。
+**状态** `done`（REQ §4）：[`finetune_instruction.py`](../finetune_instruction.py) 已实现 **`eval_val_batches`**（JSON `null` = 全 val）、**`epoch_val_full`**（epoch 末 `val_loss_full` 可与历史 best 比较并覆盖 `checkpoint_best.pt`）、日志字段 **`val_loss_sampled` / `val_loss_full`**；正式 Small 配置见 [`configs/config_instruction_train_small.json`](../configs/config_instruction_train_small.json)；[`compare_instruction_generate.py`](../compare_instruction_generate.py)（双 checkpoint 对照生成）、[`eval_instruction_loss.py`](../eval_instruction_loss.py)（仅 val CE）。本轮以 Small checkpoint 为唯一底座完成质检闭环；自动评分 / 批量导出 JSON 仍留在 backlog。
 
 （不要求新增 `m08` 模块；实现可落在 `finetune_instruction.py`、小脚本与文档。）

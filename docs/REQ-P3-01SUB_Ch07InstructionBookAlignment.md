@@ -1,7 +1,8 @@
 # REQ-P3-01SUB：第七章指令 SFT —「跟书走」对齐细则
 
 **所属**：[REQ-P3-01 · Ch7 指令 SFT](REQ-P3-01_Ch07InstructionSFT.md)（本子 REQ 只讲「书上脚本 ↔ 本仓库」映射，不写业务比方）  
-**基准**：同级仓库 [`LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py) 的 **`main()` 主线**。书中的 **`if args.test_mode`**（随机 Tiny GPT）是单机自检分支，**不在本条对照范围内**。
+**基准**：同级仓库 [`LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py) 的 **`main()` 主线**。书中的 **`if args.test_mode`**（随机 Tiny GPT）是单机自检分支，**不在本条对照范围内**。  
+**OpenSpec（行为契约）**：[指令 SFT · `instruction-sft/spec.md`](../openspec/specs/instruction-sft/spec.md)（与 REQ-P3-01 同源；**可验收行为**以 spec **需求 / 场景**为准，本条仅书本对齐细则）
 
 ---
 

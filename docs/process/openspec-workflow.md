@@ -53,11 +53,13 @@
 
 ## 5. 能力规格与 REQ 的粗映射
 
-| OpenSpec 目录 | 主要 REQ |
-|---------------|----------|
-| `pretraining/` | REQ-P1-01 … P1-07（Part I） |
-| `generation/` | REQ-P2-01 |
-| `classify-sms/` | REQ-P2-02、P2-03 |
-| `instruction-sft/` | REQ-P3-01、P3-01SUB、P3-02 |
+与 [`docs/README.md`](../README.md) **Harness × OpenSpec × REQ 总览**一致；下行便于复制检索。
 
-（映射不是一一穷尽；细分以各 REQ 头部 **OpenSpec** 链为准。）
+| OpenSpec 目录 | Harness | 闸门（若有） | 主要 REQ |
+|---------------|---------|--------------|----------|
+| `pretraining/` | Part I | **M1** | REQ-P1-01 … P1-05（契约主干）；P1-06、P1-07 见各自 REQ + pretraining **路线图** |
+| `generation/` | Part II | **M2** | REQ-P2-01 |
+| `classify-sms/` | Part II | — | REQ-P2-02、P2-03 |
+| `instruction-sft/` | Part III | — | REQ-P3-01、P3-01SUB；**P3-02** 行为已写入 [`openspec/specs/instruction-sft/spec.md`](../../openspec/specs/instruction-sft/spec.md)（归档见 [`openspec/changes/archive/instruction-sft-p3-02-monitor`](../../openspec/changes/archive/instruction-sft-p3-02-monitor/)） |
+
+（映射不是一一穷尽；细分以各 REQ 头部 **OpenSpec（行为契约）** 链为准。）

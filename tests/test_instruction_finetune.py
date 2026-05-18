@@ -2,10 +2,17 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import torch
 
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from finetune_instruction import _resolve_eval_batch_limits
+from compare_instruction_generate import _split_prompts
 from mini_llm.m07_instruction_finetune import (
     PAD_TOKEN_ID_DEFAULT,
     InstructionDataset,
@@ -14,6 +21,37 @@ from mini_llm.m07_instruction_finetune import (
     instruction_collate_fn,
     split_instruction_entries,
 )
+
+
+def test_resolve_eval_batch_limits():
+    assert _resolve_eval_batch_limits({"eval_iter": 3}) == (3, 3)
+    assert _resolve_eval_batch_limits({"eval_iter": 3, "eval_val_batches": None}) == (3, None)
+    assert _resolve_eval_batch_limits({"eval_iter": None}) == (None, None)
+
+
+def test_split_prompts_keeps_instruction_headings():
+    text = """# file-level comment
+Below is an instruction.
+
+### Instruction:
+Say hi.
+
+### Response:
+
+---
+# second prompt comment
+Below is another instruction.
+
+### Instruction:
+Say bye.
+
+### Response:
+"""
+    prompts = _split_prompts(text)
+    assert len(prompts) == 2
+    assert "### Instruction:" in prompts[0]
+    assert "### Response:" in prompts[0]
+    assert "# file-level comment" not in prompts[0]
 
 
 def test_format_input_optional_input():

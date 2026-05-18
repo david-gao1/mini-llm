@@ -1,11 +1,11 @@
 # REQ-P3-02：指令 SFT 效果检验、训练监控与质量优化
 
 **所属**：[SPEC.md](../SPEC.md) → Part III · 指令微调（质量与评测闭环）  
-**依赖**：[REQ-P3-01](REQ-P3-01_Ch07InstructionSFT.md)（训练脚本与数据管线已实现）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）；跑道 B 另依赖 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)  
+**依赖**：[REQ-P3-01](REQ-P3-01_Ch07InstructionSFT.md)（训练脚本与数据管线已实现）、[REQ-P1-05](REQ-P1-05_Train.md)（Small 预训练 checkpoint）  
 **被依赖**：暂无（后续若有「固定题库 + 自动打分」可再拆 REQ）  
-**状态**：**todo**（本文件为 2026-05-05 立题；实现可分阶段交付）  
+**状态**：✅ **已收口**（2026-05-17：以 Small checkpoint 为唯一底座；§4.1 / §4.2 / §4.3 已合主线。自动评分与批量导出保留为 backlog）  
 **现象记录**：[RUN_REPORT_instruction_sft_small.md](RUN_REPORT_instruction_sft_small.md)（冒烟跑通、日志解读）  
-**OpenSpec**：[openspec/specs/instruction-sft/spec.md](../openspec/specs/instruction-sft/spec.md) **§ Roadmap** 与本条对齐；交付完成后须将 SHALL 并入主 **Requirements**。
+**OpenSpec（行为契约）**：[指令 SFT · `instruction-sft/spec.md`](../openspec/specs/instruction-sft/spec.md) 正文需求已覆盖 P3-02 的可验收行为。
 
 ---
 
@@ -25,7 +25,7 @@
 | P3-01 已覆盖 | 本条要补齐 |
 |--------------|-----------|
 | `finetune_instruction.py` + `m07` + 单测 | **训练监控**：全 val（或可配置）loss，而非仅 `eval_iter` 个 batch |
-| `smoke_trim` 快速跑通 | **正式配方**：全量数据、多 epoch、可选 Medium 的配置与运行报告模板 |
+| `smoke_trim` 快速跑通 | **正式 Small 配方**：全量数据、多 epoch、`eval_val_batches: null` 的全 val 口径 |
 | REQ §5「肉眼 2～3 条」 | **可抄的检验命令 + 记录表**（同 prompt 双 checkpoint 对照） |
 | — | **checkpoint 策略**：epoch 末若优于历史 best 是否覆盖保存（与当前「仅按步 eval」对齐） |
 
@@ -50,7 +50,7 @@
 ### 3.1 训练侧（主因）
 
 - **数据量**：生产配置 **`smoke_trim: null`**，使用划分后 **完整** instruction 集（或文档约定子集比例）。  
-- **轮数与超参**：在 Small 上至少 **多 epoch**（具体数以 `val_loss` 平台期为准，写进 RUN_REPORT）；Medium 依赖 P1-07 checkpoint。  
+- **轮数与超参**：在 Small 上至少 **多 epoch**（具体数以 `val_loss` 平台期为准，写进 RUN_REPORT）；Medium 不作为本轮 P3 底座。  
 - **监控口径**：增加 **`--eval-full-val`** 或 `eval_iter: null` 表示扫完整个 val DataLoader；日志中区分 **`val_loss_sampled`** vs **`val_loss_full`**（命名可在实现时定）。  
 - **checkpoint**：在 **每个 epoch 结束** 用与 best 相同口径再算一次 val，若更优则 `torch.save`（或与按步 best 取 **min**，实现二选一并在 SPEC 写清）。
 
@@ -73,12 +73,14 @@
 
 ## 4. 交付与验收（草案）
 
-### 4.1 阶段 A · 文档与可执行清单（可先合入）
+**实现进度（仓库，2026-05-17）**：§4.1 / §4.2 / §4.3 均已在 `finetune_instruction.py`、`configs/config_instruction_train_small.json`、`compare_instruction_generate.py`、`eval_instruction_loss.py`、`README.md`、`docs/README.md`、`OWNER_CHECKLIST.md` 与 OpenSpec 中落地。本轮验收限定在 Small checkpoint；Medium 不作为底座。
+
+### 4.1 阶段 A · 文档与可执行清单
 
 | # | 交付物 | 怎样算过 |
 |---|--------|----------|
-| A1 | 在 **[`RUN_REPORT_instruction_sft_small.md`](RUN_REPORT_instruction_sft_small.md)** 或新建的 **「正式 Small 跑」报告** 中，增加 **「检验步骤」** 小节：L0 + L1 命令 + 记录表示意 | Reviewer 照抄命令能复现对照 |
-| A2 | [`README.md`](../README.md) 或 [`docs/README.md`](README.md) 链到本条 REQ | 索引导航一致 |
+| A1 | **[`RUN_REPORT_instruction_sft_small.md`](RUN_REPORT_instruction_sft_small.md)** 与本 REQ 说明「冒烟报告 + 事后复评」口径；正式 Small 跑使用 `config_instruction_train_small.json` 复现 | Reviewer 照抄命令能复现对照 |
+| A2 | [`README.md`](../README.md) 与 [`docs/README.md`](README.md) 链到本条 REQ 与对照脚本 | 索引导航一致 |
 | A3 | [`OWNER_CHECKLIST.md`](OWNER_CHECKLIST.md) 增加 **P3-02** 章节（可复制的 bash、判断阈值说明） | 负责人能自主验收 |
 
 ### 4.2 阶段 B · 训练脚本增强（代码）
@@ -105,16 +107,16 @@
 
 ## 5. 依赖与顺序
 
-1. 阶段 A 可与阶段 B **并行**（文档不依赖代码）。  
-2. 阶段 B 的 **Medium** 配置应在 **P1-07 checkpoint 可用** 后再写运行报告（或明确仅 Small）。  
-3. L1 对照实验须 **固定解码参数**，并在报告中 **逐字记录**。
+1. 本轮 P3-02 以 **Small 预训练 checkpoint** 为底座；P1-07 Medium 不阻塞、不作为 SFT 底座。  
+2. L1 对照实验须 **固定解码参数**，并在报告中 **逐字记录**。  
+3. 正式 Small 训练优先使用 [`configs/config_instruction_train_small.json`](../configs/config_instruction_train_small.json)；冒烟复评可继续使用 `configs/config_instruction_small.json`。
 
 ---
 
 ## 6. 文档索引
 
 新增或更新：[`SPEC.md`](../SPEC.md)、[`HARNESS.md`](../HARNESS.md)、[`OWNER_CHECKLIST.md`](OWNER_CHECKLIST.md)、[`REFERENCE.md`](../REFERENCE.md)、[`LEARNING_LOG.md`](LEARNING_LOG.md) 中与指令质检相关的思考题。  
-**OpenSpec**：实施过程中若固化可验收行为，更新 [`openspec/specs/instruction-sft/spec.md`](../openspec/specs/instruction-sft/spec.md)（将 **§ Roadmap** 提升为 **Requirement**）。
+**OpenSpec（行为契约）**：已固化的可验收行为见 [`instruction-sft/spec.md`](../openspec/specs/instruction-sft/spec.md) 正文 **需求** + **场景**；文末路线图仅保留自动评分 / 批量导出等非阻塞 backlog。
 
 ---
 
@@ -122,5 +124,6 @@
 
 | 日期 | 变更 |
 |------|------|
-| 2026-05-06 | §6：链至 OpenSpec `instruction-sft`；closure 时升格 Roadmap。 |
+| 2026-05-17 | 收口：Small-only 质检闭环完成；Medium 不作为本轮 SFT 底座；自动评分 / 批量导出保留为 backlog。 |
+| 2026-05-07 | 标注进行中：§4.2/§4.3 已在主线实现（见 §4 顶部进度）。 |
 | 2026-05-05 | 初稿：记录 Q-1～Q-5、优化三向（训练/解码/评测）、阶段 A/B/C 验收与 backlog。 |

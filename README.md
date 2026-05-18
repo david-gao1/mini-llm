@@ -1,5 +1,7 @@
 # 微型 LLM — 团队主项目（从零实现）
 
+> 如果你只是想快速知道「这个项目做了什么、有哪些能力、怎么演示」，先读全员版说明：[`docs/PROJECT_OVERVIEW_EVERYONE.md`](docs/PROJECT_OVERVIEW_EVERYONE.md)。
+
 本目录与官方书本仓库 **`LLMs-from-scratch` 同级**，互不嵌套，避免与上游混淆。
 
 ```
@@ -60,7 +62,7 @@ uv run python eval_classify.py
 
 对照结论与健康阈值见 [`docs/REPORT_ClassifySpamProbe.md`](docs/REPORT_ClassifySpamProbe.md)、验收手册 [`docs/OWNER_CHECKLIST.md`](docs/OWNER_CHECKLIST.md)。
 
-**指令微调（第 7 章 SFT）**：[`finetune_instruction.py`](finetune_instruction.py) + [`configs/config_instruction_small.json`](configs/config_instruction_small.json)（默认 `smoke_trim` 缩短样本；须先有 `runs/gpt2_small_wikitext103/checkpoint_best.pt`）。全量 + Medium 见 [`configs/config_instruction_medium.json`](configs/config_instruction_medium.json)（依赖 [REQ-P1-07](docs/REQ-P1-07_GPT2Medium.md)）。说明见 [`docs/REQ-P3-01_Ch07InstructionSFT.md`](docs/REQ-P3-01_Ch07InstructionSFT.md)。
+**指令微调（第 7 章 SFT）**：[`finetune_instruction.py`](finetune_instruction.py) + [`configs/config_instruction_small.json`](configs/config_instruction_small.json)（默认 `smoke_trim` 缩短样本；须先有 `runs/gpt2_small_wikitext103/checkpoint_best.pt`）。正式 Small（全划分、`eval_val_batches: null`、多 epoch）见 [`configs/config_instruction_train_small.json`](configs/config_instruction_train_small.json)。只算 val CE：[`eval_instruction_loss.py`](eval_instruction_loss.py) 或 `finetune_instruction.py --eval-val-only --eval-checkpoint …`。预训练 vs SFT 对照生成：[`compare_instruction_generate.py`](compare_instruction_generate.py) + [`docs/prompts/instruction_compare_sample.txt`](docs/prompts/instruction_compare_sample.txt)。本轮 P3-02 **以 Small checkpoint 为唯一底座收口**；Medium 仅保留为 P1-07 独立预训练实验，不作为指令 SFT 底座。质检闭环见 [REQ-P3-02](docs/REQ-P3-02_InstructionSFTEvalAndQuality.md)。
 
 ```bash
 uv run python finetune_instruction.py --config configs/config_instruction_small.json
@@ -141,7 +143,9 @@ tail -f "/abs/path/to/team-mini-llm/train_wt103.log"
 | [`src/mini_llm/`](src/mini_llm/) | 源码：`m01_tokenizer/` … `m07_instruction_finetune/` |
 | [`train.py`](train.py) | 训练入口（预训练循环、损失、评估） |
 | [`finetune_classify.py`](finetune_classify.py) | SMS Spam 分类微调（第六章对齐） |
-| [`finetune_instruction.py`](finetune_instruction.py) | 指令 SFT（第七章对齐；[`configs/config_instruction_small.json`](configs/config_instruction_small.json)） |
+| [`finetune_instruction.py`](finetune_instruction.py) | 指令 SFT（第七章对齐；[`configs/config_instruction_small.json`](configs/config_instruction_small.json)、[`configs/config_instruction_train_small.json`](configs/config_instruction_train_small.json)） |
+| [`eval_instruction_loss.py`](eval_instruction_loss.py) | 仅计算指令 val CE（抽样 + 全量；等价 `--eval-val-only`） |
+| [`compare_instruction_generate.py`](compare_instruction_generate.py) | 同一批 prompt 下预训练 vs SFT 对照生成（Markdown） |
 | [`classify_sms.py`](classify_sms.py) | 加载微调后的权重（**默认** `runs/spam_classify_phase_b/checkpoint_best.pt`），单行英文短信 → `ham` / `spam` |
 | [`generate_from_checkpoint.py`](generate_from_checkpoint.py) | 加载 `checkpoint_*.pt` 做文本生成（检验效果） |
 | [`REFERENCE.md`](REFERENCE.md) | 如何对照隔壁书本仓库的章节与路径 |

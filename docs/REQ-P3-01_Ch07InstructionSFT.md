@@ -1,11 +1,11 @@
 # REQ-P3-01：第 7 章——教会模型「听指令、写回答」（指令微调 SFT）
 
 **所属**：[SPEC.md](../SPEC.md) → Part III · 指令微调（第 7 章）  
-**依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（`GPTModel`）、[REQ-P1-05](REQ-P1-05_Train.md)（预训练 checkpoint）；**轨道 B** 还要等 [REQ-P1-07](REQ-P1-07_GPT2Medium.md)（Medium 大模型训完可用）  
+**依赖**：[REQ-P1-04](REQ-P1-04_Model.md)（`GPTModel`）、[REQ-P1-05](REQ-P1-05_Train.md)（Small 预训练 checkpoint）  
 **被依赖**：[REQ-P3-02](REQ-P3-02_InstructionSFTEvalAndQuality.md)（效果检验、训练监控与质量优化）  
-**状态**：✅ **轨道 A 已实现**（`m07` + `finetune_instruction.py` + 单测）；**轨道 B** 依赖 [REQ-P1-07](REQ-P1-07_GPT2Medium.md) Medium checkpoint；DPO → §9 backlog  
+**状态**：✅ **已实现**（`m07` + `finetune_instruction.py` + 单测；本轮以 Small checkpoint 为底座收口）；DPO → §9 backlog  
 **原书对照**：和本仓库 **同级**的 [`../../LLMs-from-scratch/ch07/`](../../LLMs-from-scratch/ch07/) · [`gpt_instruction_finetuning.py`](../../LLMs-from-scratch/ch07/01_main-chapter-code/gpt_instruction_finetuning.py) · [`REFERENCE.md`](../REFERENCE.md)  
-**OpenSpec（行为契约）**：[openspec/specs/instruction-sft/spec.md](../openspec/specs/instruction-sft/spec.md)
+**OpenSpec（行为契约）**：[指令 SFT · `instruction-sft/spec.md`](../openspec/specs/instruction-sft/spec.md)
 
 ---
 
@@ -39,9 +39,9 @@
 |------|------|
 | **跟书走** | 数据模板、划分、collate、loss 等与 **`gpt_instruction_finetuning.py`** **`main()`** 对齐；**细则（四段流水线 + 刻意差异）** 见子文档 [**REQ-P3-01SUB**](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)。实现上使用 **`GPTModel` + `encode_text`**，不复制书里 `previous_chapters`。 |
 | **只做 SFT** | 只有「标准答案抄写作业」这一种训练；**不做** DPO、奖励模型、强化学习那一套。 |
-| **两条跑道** | **跑道 A**：用小模型（GPT-2 **Small**）+ **很少几条**指令数据，先把整条链路跑通（类似书里快速测试模式）。**跑道 B**：用大一点的 **GPT-2 Medium**（体量大约 **3 亿多参数**，和 [`REQ-P1-07`](REQ-P1-07_GPT2Medium.md) / `config_medium.json` 那条线一致），用 **完整（或接近完整）** 的指令数据认真训；**前提是大模型的预训练 checkpoint 已经有了**。 |
+| **一条正式跑道** | 用 GPT-2 **Small** 预训练 checkpoint 做底座：先用 `config_instruction_small.json` 冒烟，再用 `config_instruction_train_small.json` 做全划分、多 epoch、全 val 质检。**Medium checkpoint 不作为本轮 SFT 底座**；P1-07 仍是独立预训练实验。 |
 
-两条跑道用的是 **同一套代码和数据管线**，只是 **换起点权重**、**换数据多少**、**换训练多久**。  
+冒烟与正式 Small 用的是 **同一套代码和数据管线**，只是 **换数据多少**、**换训练多久**、**换评估口径**。  
 **书上每一步 ↔ 仓库符号**：见 [**REQ-P3-01SUB · 「跟书走」对齐细则**](REQ-P3-01SUB_Ch07InstructionBookAlignment.md)。
 
 ---
@@ -59,7 +59,7 @@
 
 - **一个新模块**（例如 `mini_llm.m07_instruction_finetune`）：负责读 JSON、拼字符串、Dataset、以及「把一批样本垫齐并打上不算分记号」的函数。
 - **一个新脚本**（例如根目录 `finetune_instruction.py`）：加载 **已有的预训练** `.pt` → 跑训练循环 → 再存一个新的 `.pt`，供后面接 **生成脚本** 试用。
-- **两份配置**（例如 `configs/config_instruction_small.json` 和 `…_medium.json`）：里面写 **预训练权重路径**、数据路径或网址、学习率、batch、最长长度等——两条跑道各用一份。
+- **两份 Small 配置**：`configs/config_instruction_small.json` 用于冒烟；`configs/config_instruction_train_small.json` 用于全划分、多 epoch 与全 val 质检。里面写 **预训练权重路径**、数据路径或网址、学习率、batch、最长长度等。
 
 ---
 
@@ -107,8 +107,8 @@ instruction-data.json（很多条「指令+回答」）
 
 ## 6. 谁先谁后（依赖）
 
-- **跑道 A**：只要你有 **Small** 的预训练 checkpoint（例如 WikiText 那条）就能开始。
-- **跑道 B**：要等 **Medium** 预训练（P1-07）**跑出可用权重**；在那之前先把跑道 A 跑通最省事。
+- 只要你有 **Small** 的预训练 checkpoint（例如 WikiText-103 那条）就能开始并完成本轮验收。
+- **Medium** 预训练（P1-07）不作为本轮 SFT 底座，也不阻塞 P3-01 / P3-02。
 
 ---
 
@@ -127,7 +127,7 @@ instruction-data.json（很多条「指令+回答」）
 ## 8. 文档索引（做完代码后要回来改的）
 
 [`SPEC.md`](../SPEC.md)、[`HARNESS.md`](../HARNESS.md)、[`docs/README.md`](README.md)、[`REFERENCE.md`](../REFERENCE.md)、[`README.md`](../README.md)。自学问题可写在 [`LEARNING_LOG.md`](LEARNING_LOG.md)。  
-**OpenSpec（行为契约）**：[openspec/specs/instruction-sft/spec.md](../openspec/specs/instruction-sft/spec.md)。  
+行为契约见文首 **OpenSpec（行为契约）**。  
 **质检与优化闭环**（全 val、对照生成、checkpoint 策略等）：[**REQ-P3-02**](REQ-P3-02_InstructionSFTEvalAndQuality.md)。
 
 ---
@@ -147,6 +147,7 @@ instruction-data.json（很多条「指令+回答」）
 
 | 日期 | 变更 |
 |------|------|
+| 2026-05-17 | 决策更新：Medium checkpoint 不作为本轮 SFT 底座；P3 以 Small-only 跑道收口。 |
 | 2026-04-30 | 初稿：参考书数据/脚本、仅 SFT、Small/Medium 双轨；DPO → §9。 |
 | 2026-04-30 | 全文改写成更易读的表述（比方、表格白话、术语后置）。 |
 | 2026-05-05 | §8：链至 [**REQ-P3-02**](REQ-P3-02_InstructionSFTEvalAndQuality.md)；**被依赖**更新为 P3-02。 |
